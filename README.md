@@ -37,3 +37,4 @@ Testy rdzenia: `cargo test -p cw-core`.
 - [ ] Etap 2: podpowiedzi (Claude Code, API), wykrywanie pytań, zrzuty ekranu
 - [ ] Etap 3: nakładka, pasek u góry ekranu, import nagrań
 - [ ] Etap 4: rozpoznawanie głosów, wykrywanie rozmów, OBS
+<!-- bump: 91e12f7 -->

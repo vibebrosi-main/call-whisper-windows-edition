@@ -1,0 +1,1169 @@
+{
+  "note": "Wygenerowane przez macos/tools/gen-fixtures.mjs z implementacji JS. Nie edytuj ręcznie.",
+  "reconcileCases": [
+    {
+      "prev": "",
+      "next": "Cześć wszystkim",
+      "result": "Cześć wszystkim"
+    },
+    {
+      "prev": "Cześć wszystkim",
+      "next": "Cześć wszystkim, zaczynamy",
+      "result": "Cześć wszystkim, zaczynamy"
+    },
+    {
+      "prev": "Cześć wszystkim zaczynamy stand",
+      "next": "Cześć wszystkim zaczynamy standup",
+      "result": "Cześć wszystkim zaczynamy standup"
+    },
+    {
+      "prev": "ala ma kota a kot ma",
+      "next": "kota a kot ma ale",
+      "result": "ala ma kota a kot ma ale"
+    },
+    {
+      "prev": "zupełnie inny tekst",
+      "next": "nic wspólnego tutaj",
+      "result": "zupełnie inny tekst nic wspólnego tutaj"
+    },
+    {
+      "prev": "Mamy snapshoty co godzinę",
+      "next": "Mamy snapshoty co godzinę",
+      "result": "Mamy snapshoty co godzinę"
+    },
+    {
+      "prev": "abc",
+      "next": "abcdef",
+      "result": "abcdef"
+    },
+    {
+      "prev": "jeden dwa trzy cztery",
+      "next": "jeden dwa trzy",
+      "result": "jeden dwa trzy cztery"
+    }
+  ],
+  "normalizeCases": [
+    {
+      "input": "  wiele   spacji  ",
+      "result": "wiele spacji"
+    },
+    {
+      "input": "zero​szerokości",
+      "result": "zeroszerokości"
+    },
+    {
+      "input": "nowa\nlinia\ti tab",
+      "result": "nowa linia i tab"
+    },
+    {
+      "input": "",
+      "result": ""
+    }
+  ],
+  "foldCases": [
+    {
+      "input": "Słychać",
+      "result": "slychac"
+    },
+    {
+      "input": "CZY KTOŚ WIE",
+      "result": "czy ktos wie"
+    },
+    {
+      "input": "żółć gęś",
+      "result": "zolc ges"
+    },
+    {
+      "input": "Łódź",
+      "result": "lodz"
+    }
+  ],
+  "wordCountCases": [
+    {
+      "input": "ala ma kota",
+      "result": 3
+    },
+    {
+      "input": "",
+      "result": 0
+    },
+    {
+      "input": "   jeden   ",
+      "result": 1
+    }
+  ],
+  "truncateCases": [
+    {
+      "input": "bardzo długi tekst do ucięcia",
+      "max": 10,
+      "result": "bardzo dł…"
+    }
+  ],
+  "offsetCases": [
+    {
+      "ms": 0,
+      "result": "00:00:00"
+    },
+    {
+      "ms": 4000,
+      "result": "00:00:04"
+    },
+    {
+      "ms": 71000,
+      "result": "00:01:11"
+    },
+    {
+      "ms": 3661000,
+      "result": "01:01:01"
+    },
+    {
+      "ms": -500,
+      "result": "00:00:00"
+    }
+  ],
+  "durationCases": [
+    {
+      "ms": 0,
+      "result": "0s"
+    },
+    {
+      "ms": 8000,
+      "result": "8s"
+    },
+    {
+      "ms": 2531000,
+      "result": "42m 11s"
+    },
+    {
+      "ms": 3732000,
+      "result": "1h 02m"
+    }
+  ],
+  "questionCases": [
+    {
+      "text": "Okej, to opowiedz mi teraz więcej o tym swoim ostatnim projekcie, czym się tam zajmowałeś, za co byłeś odpowiedzialny.",
+      "isQuestion": true,
+      "confidence": 0.8,
+      "reason": "słowo-pytające+do-rozmówcy+zwrot-pytający",
+      "question": "to opowiedz mi teraz więcej o tym swoim ostatnim projekcie, czym się tam zajmowałeś, za co byłeś odpowiedzialny."
+    },
+    {
+      "text": "Tak, ale pozwól, że zacznijmy od tego, jak wygląda sytuacja zatrudnieniowa teraz u ciebie, dlaczego szukasz pracy.",
+      "isQuestion": true,
+      "confidence": 0.8,
+      "reason": "słowo-pytające+do-rozmówcy+zwrot-pytający",
+      "question": "jak wygląda sytuacja zatrudnieniowa teraz u ciebie, dlaczego szukasz pracy."
+    },
+    {
+      "text": "Wcześniej to były obowiązki raczej związane z testami manualnymi. Zgadza się?",
+      "isQuestion": true,
+      "confidence": 1,
+      "reason": "pytajnik+zwrot-pytający",
+      "question": "Wcześniej to były obowiązki raczej związane z testami manualnymi. Zgadza się?"
+    },
+    {
+      "text": "Okej, rzeczy administracyjne. Są trzy. Pierwsze, od kiedy jesteś dostępny.",
+      "isQuestion": true,
+      "confidence": 0.4,
+      "reason": "zwrot-pytający",
+      "question": "Pierwsze, od kiedy jesteś dostępny."
+    },
+    {
+      "text": "Okej, mam pytanie, czym różni się Vue od Nuxta?",
+      "isQuestion": true,
+      "confidence": 1,
+      "reason": "pytajnik+słowo-pytające+zwrot-pytający",
+      "question": "czym różni się Vue od Nuxta?"
+    },
+    {
+      "text": "I rozumiem, że to zatrudnienie do końca roku jest dla ciebie okej.",
+      "isQuestion": true,
+      "confidence": 0.4,
+      "reason": "zwrot-pytający",
+      "question": "I rozumiem, że to zatrudnienie do końca roku jest dla ciebie okej."
+    },
+    {
+      "text": "Nie, po prostu jakie featury w danej aplikacji stworzyłeś przy użyciu tego frameworku, co w nim napisałeś.",
+      "isQuestion": true,
+      "confidence": 0.4,
+      "reason": "słowo-pytające+do-rozmówcy",
+      "question": "po prostu jakie featury w danej aplikacji stworzyłeś przy użyciu tego frameworku, co w nim napisałeś."
+    },
+    {
+      "text": "Tak, ja się może połączę, jeżeli ty masz jakieś konkretne pytania, to śmiało możesz je zadawać.",
+      "isQuestion": true,
+      "confidence": 0.4,
+      "reason": "zwrot-pytający",
+      "question": "ja się może połączę, jeżeli ty masz jakieś konkretne pytania, to śmiało możesz je zadawać."
+    },
+    {
+      "text": "Podobało mi się, jak to zrobiłeś.",
+      "isQuestion": false,
+      "confidence": 0,
+      "reason": "brak-sygnałów",
+      "question": ""
+    },
+    {
+      "text": "Nie, po co to robić.",
+      "isQuestion": false,
+      "confidence": 0.2,
+      "reason": "słowo-pytające",
+      "question": ""
+    },
+    {
+      "text": "Jak widzisz, projekt jest dość duży.",
+      "isQuestion": false,
+      "confidence": 0.2,
+      "reason": "słowo-pytające",
+      "question": ""
+    },
+    {
+      "text": "Jak wiesz, klient jest z Niemiec.",
+      "isQuestion": false,
+      "confidence": 0.2,
+      "reason": "słowo-pytające",
+      "question": ""
+    },
+    {
+      "text": "A co robisz, kiedy nie zgadzasz się z decyzją lidera.",
+      "isQuestion": true,
+      "confidence": 0.4,
+      "reason": "słowo-pytające+do-rozmówcy",
+      "question": "A co robisz, kiedy nie zgadzasz się z decyzją lidera."
+    },
+    {
+      "text": "Jak radzisz sobie z presją czasu.",
+      "isQuestion": true,
+      "confidence": 0.4,
+      "reason": "słowo-pytające+do-rozmówcy",
+      "question": "Jak radzisz sobie z presją czasu."
+    },
+    {
+      "text": "Widać mnie dobrze?",
+      "isQuestion": false,
+      "confidence": 0,
+      "reason": "small-talk",
+      "question": ""
+    },
+    {
+      "text": "Masz rację, to dobry pomysł.",
+      "isQuestion": false,
+      "confidence": 0,
+      "reason": "brak-sygnałów",
+      "question": ""
+    },
+    {
+      "text": "Jesteś gotowy na zadanie techniczne na żywo?",
+      "isQuestion": true,
+      "confidence": 0.6,
+      "reason": "pytajnik",
+      "question": "Jesteś gotowy na zadanie techniczne na żywo?"
+    },
+    {
+      "text": "Co ciekawe, klient sam pisze testy.",
+      "isQuestion": false,
+      "confidence": 0.2,
+      "reason": "słowo-pytające",
+      "question": ""
+    },
+    {
+      "text": "A jak podchodzisz do testowania komponentów.",
+      "isQuestion": true,
+      "confidence": 0.4,
+      "reason": "słowo-pytające+do-rozmówcy",
+      "question": "A jak podchodzisz do testowania komponentów."
+    },
+    {
+      "text": "Gdzie się widzisz za pięć lat?",
+      "isQuestion": true,
+      "confidence": 1,
+      "reason": "pytajnik+słowo-pytające",
+      "question": "Gdzie się widzisz za pięć lat?"
+    },
+    {
+      "text": "Rozumiem, że praca w pełni zdalna ci pasuje.",
+      "isQuestion": true,
+      "confidence": 0.4,
+      "reason": "zwrot-pytający",
+      "question": "Rozumiem, że praca w pełni zdalna ci pasuje."
+    },
+    {
+      "text": "Dzień dobry, słyszymy się?",
+      "isQuestion": false,
+      "confidence": 0,
+      "reason": "small-talk",
+      "question": ""
+    },
+    {
+      "text": "Jak widzisz, projekt jest dość duży.",
+      "isQuestion": false,
+      "confidence": 0.2,
+      "reason": "słowo-pytające",
+      "question": ""
+    },
+    {
+      "text": "A jakie RPO i RTO to nam daje?",
+      "isQuestion": true,
+      "confidence": 1,
+      "reason": "pytajnik+słowo-pytające",
+      "question": "A jakie RPO i RTO to nam daje?"
+    },
+    {
+      "text": "Wracając do migracji, mam pytanie, czym różni się RPO od RTO",
+      "isQuestion": true,
+      "confidence": 0.8,
+      "reason": "słowo-pytające+zwrot-pytający",
+      "question": "czym różni się RPO od RTO"
+    },
+    {
+      "text": "czy mnie słychać",
+      "isQuestion": false,
+      "confidence": 0,
+      "reason": "small-talk",
+      "question": ""
+    },
+    {
+      "text": "no dobra",
+      "isQuestion": false,
+      "confidence": 0,
+      "reason": "za-krótkie",
+      "question": ""
+    },
+    {
+      "text": "Czy ktoś wie ile to kosztuje",
+      "isQuestion": true,
+      "confidence": 0.8,
+      "reason": "słowo-pytające+zwrot-pytający",
+      "question": "Czy ktoś wie ile to kosztuje"
+    },
+    {
+      "text": "widzicie mój ekran",
+      "isQuestion": false,
+      "confidence": 0,
+      "reason": "small-talk",
+      "question": ""
+    },
+    {
+      "text": "Ile mamy czasu do końca sprintu",
+      "isQuestion": true,
+      "confidence": 0.4,
+      "reason": "słowo-pytające",
+      "question": "Ile mamy czasu do końca sprintu"
+    },
+    {
+      "text": "Halo halo",
+      "isQuestion": false,
+      "confidence": 0,
+      "reason": "za-krótkie",
+      "question": ""
+    },
+    {
+      "text": "Zastanawiam się nad polityką backupów",
+      "isQuestion": true,
+      "confidence": 0.4,
+      "reason": "zwrot-pytający",
+      "question": "Zastanawiam się nad polityką backupów"
+    },
+    {
+      "text": "What does this endpoint return",
+      "isQuestion": true,
+      "confidence": 0.8,
+      "reason": "słowo-pytające+zwrot-pytający",
+      "question": "What does this endpoint return"
+    },
+    {
+      "text": "Od której wersji API dostępny jest Predictive Back",
+      "isQuestion": true,
+      "confidence": 0.4,
+      "reason": "słowo-pytające",
+      "question": "Od której wersji API dostępny jest Predictive Back"
+    },
+    {
+      "text": "A jak to wpłynie na czas budowania w Gradle",
+      "isQuestion": true,
+      "confidence": 0.4,
+      "reason": "słowo-pytające",
+      "question": "A jak to wpłynie na czas budowania w Gradle"
+    },
+    {
+      "text": "Czy ktoś wie jak dokładnie działa remember w Compose",
+      "isQuestion": true,
+      "confidence": 0.8,
+      "reason": "słowo-pytające+zwrot-pytający",
+      "question": "Czy ktoś wie jak dokładnie działa remember w Compose"
+    },
+    {
+      "text": "A potem wrócimy do listy transakcji",
+      "isQuestion": false,
+      "confidence": 0,
+      "reason": "brak-sygnałów",
+      "question": ""
+    },
+    {
+      "text": "No i tyle w tym temacie",
+      "isQuestion": false,
+      "confidence": 0,
+      "reason": "brak-sygnałów",
+      "question": ""
+    },
+    {
+      "text": "Shared Flow do zdarzeń jednorazowych, takich jak nawigacja. Wracając do listy mam pytanie, czy LazyColumn recyklinguje elementy tak samo jak RecyclerView? Nie do końca tak samo, ale efekt jest podobny.",
+      "isQuestion": true,
+      "confidence": 1,
+      "reason": "pytajnik+słowo-pytające+zwrot-pytający",
+      "question": "Wracając do listy mam pytanie, czy LazyColumn recyklinguje elementy tak samo jak RecyclerView?"
+    },
+    {
+      "text": "Dobra. Teraz o wydajności. Czy ktoś wie, jak dokładnie działa remember w Compose? Remember zapamiętuje wartość w slocie kompozycji.",
+      "isQuestion": true,
+      "confidence": 1,
+      "reason": "pytajnik+słowo-pytające+zwrot-pytający",
+      "question": "Czy ktoś wie, jak dokładnie działa remember w Compose?"
+    },
+    {
+      "text": "Dobra, a teraz coś trudniejszego. Czy ktoś wie, co się dzieje ze statusem wykonania, gdy aplikacja stoi w tle przez całą noc i mija północ?",
+      "isQuestion": true,
+      "confidence": 1,
+      "reason": "pytajnik+słowo-pytające+zwrot-pytający",
+      "question": "Czy ktoś wie, co się dzieje ze statusem wykonania, gdy aplikacja stoi w tle przez całą noc i mija północ?"
+    },
+    {
+      "text": "Czekaj, czyli swipe nie usuwa nawyku? To gdzie jest usuwanie i czy jest potwierdzenie?",
+      "isQuestion": true,
+      "confidence": 1,
+      "reason": "pytajnik+słowo-pytające",
+      "question": "czyli swipe nie usuwa nawyku? To gdzie jest usuwanie i czy jest potwierdzenie?"
+    },
+    {
+      "text": "Podobało mi się, jak zrobiłeś. Kiedy będę miał parę pytań bardziej do Ciebie, takich ogólnych.",
+      "isQuestion": false,
+      "confidence": 0.2,
+      "reason": "słowo-pytające",
+      "question": ""
+    },
+    {
+      "text": "Raportowanie godzin, czy tam estymacja zadań będzie również na ClickUpie.",
+      "isQuestion": false,
+      "confidence": 0,
+      "reason": "brak-sygnałów",
+      "question": ""
+    },
+    {
+      "text": "trzy miesiące. na takim pełen metacie. A co dalej będzie, to nie wiadomo. Plany są jakby na rozwój.",
+      "isQuestion": false,
+      "confidence": 0.2,
+      "reason": "słowo-pytające",
+      "question": ""
+    },
+    {
+      "text": "To jeżeli miałbyś tak określić, na przykład, ile już...",
+      "isQuestion": false,
+      "confidence": 0.2,
+      "reason": "słowo-pytające",
+      "question": ""
+    },
+    {
+      "text": "Mieliś doświadczenie, designerem byłeś tylko, tak?",
+      "isQuestion": false,
+      "confidence": 0.25,
+      "reason": "potwierdzenie",
+      "question": ""
+    },
+    {
+      "text": "Okej, no bo mówisz o tej firmie na pełnym etacie, której nie ma w CV, tak? W sensie, czy ona gdzieś jest?",
+      "isQuestion": true,
+      "confidence": 1,
+      "reason": "pytajnik+słowo-pytające",
+      "question": "no bo mówisz o tej firmie na pełnym etacie, której nie ma w CV, tak? W sensie, czy ona gdzieś jest?"
+    },
+    {
+      "text": "Dobra. Fajnie. Dobra, a powiedz mi, jak długo programujesz? Bo tam widziałem, że na początku",
+      "isQuestion": true,
+      "confidence": 1,
+      "reason": "pytajnik+słowo-pytające",
+      "question": "Fajnie. Dobra, a powiedz mi, jak długo programujesz?"
+    },
+    {
+      "text": "Okej, a jak twoja praca wyglądała jako pełen etat? I jakie to były firmy? I jak to był podział? Bo ciągle mówisz.",
+      "isQuestion": true,
+      "confidence": 1,
+      "reason": "pytajnik+słowo-pytające",
+      "question": "a jak twoja praca wyglądała jako pełen etat? I jakie to były firmy? I jak to był podział?"
+    },
+    {
+      "text": "Dziękuje za uwagę. Okej, ale to byś poszył jakby oddzielny komponent do tego, na jednym byś to wszystko zrobił?",
+      "isQuestion": true,
+      "confidence": 0.6,
+      "reason": "pytajnik",
+      "question": "ale to byś poszył jakby oddzielny komponent do tego, na jednym byś to wszystko zrobił?"
+    },
+    {
+      "text": "Pracowałeś firmy jako frontendowiec o full stack, to ile to będzie lat? Rok? Dwa?",
+      "isQuestion": true,
+      "confidence": 0.6,
+      "reason": "pytajnik",
+      "question": "Pracowałeś firmy jako frontendowiec o full stack, to ile to będzie lat? Rok? Dwa?"
+    },
+    {
+      "text": "Używasz Next.js czy Node.js do backendu?",
+      "isQuestion": true,
+      "confidence": 0.6,
+      "reason": "pytajnik",
+      "question": "Używasz Next.js czy Node.js do backendu?"
+    },
+    {
+      "text": "Okej, ale... od node'a jakieś frameworki, na przykład Next.js, Hono, czy też nie?",
+      "isQuestion": true,
+      "confidence": 0.6,
+      "reason": "pytajnik",
+      "question": "od node'a jakieś frameworki, na przykład Next.js, Hono, czy też nie?"
+    }
+  ],
+  "clauseCases": [
+    {
+      "text": "Wracając do migracji, mam pytanie, czym różni się RPO od RTO",
+      "result": [
+        "Wracając do migracji",
+        "mam pytanie",
+        "czym różni się RPO od RTO"
+      ]
+    }
+  ],
+  "markdown": "# Standup zespołu\n\n2026-08-23 10:15 · 42m 11s · Google Meet\n\n## Uczestnicy\n\n| Osoba | Wypowiedzi | Słowa | Udział |\n| --- | ---: | ---: | ---: |\n| Anna Kowalska | 2 | 6 | 46% |\n| Jan Nowak | 1 | 7 | 54% |\n\n## Transkrypt\n\n**[00:00:04] Anna Kowalska**\n\nCześć wszystkim, zaczynamy standup.\n\n**[00:00:11] Jan Nowak**\n\nHej, słychać mnie? Mam \\*gwiazdkę\\* i \\_podkreślenie\\_.\n\n**[00:00:20] Anna Kowalska** _(w trakcie)_\n\nLecimy dalej.\n",
+  "markdownEn": "# Standup zespołu\n\n2026-08-23 10:15 · 42m 11s · Google Meet\n\n## Transcript\n\n**[00:00:04] Anna Kowalska**\n\nCześć wszystkim, zaczynamy standup.\n\n**[00:00:11] Jan Nowak**\n\nHej, słychać mnie? Mam \\*gwiazdkę\\* i \\_podkreślenie\\_.\n\n**[00:00:20] Anna Kowalska** _(live)_\n\nLecimy dalej.\n",
+  "transcriptResult": [
+    {
+      "speaker": "Anna",
+      "text": "Cześć wszystkim",
+      "offsetMs": 100,
+      "final": true
+    },
+    {
+      "speaker": "Jan",
+      "text": "Hej",
+      "offsetMs": 900,
+      "final": true
+    },
+    {
+      "speaker": "Anna",
+      "text": "Druga wypowiedź Anny",
+      "offsetMs": 30000,
+      "final": true
+    }
+  ],
+  "mfccFrames": [
+    [
+      2.90353462448463,
+      -0.34341186353096637,
+      12.755231625454064,
+      1.0442051086692992,
+      -8.431532506597616,
+      0.8528667999696559,
+      -0.6022049462856869,
+      -1.446521596012913,
+      1.132415188323061,
+      2.6207910974092252,
+      5.304633151041327,
+      0.4346703368851332
+    ],
+    [
+      3.0596184830965285,
+      0.035803281443062746,
+      13.233716557521625,
+      0.22474012258278522,
+      -8.76689282299043,
+      0.9340027281131968,
+      -0.033972118003825026,
+      -1.4290972285502215,
+      1.0544124457505069,
+      2.6604568674763622,
+      5.129378049013186,
+      0.3346022208713063
+    ],
+    [
+      2.959232786734425,
+      -0.6427595426624253,
+      11.492909450407709,
+      0.2778029885433474,
+      -7.667964369959719,
+      0.8594766034858045,
+      -0.04783308374778527,
+      -1.181819747876373,
+      1.0413237538832918,
+      2.331504639394929,
+      5.1668270518844635,
+      0.04985466242599037
+    ]
+  ],
+  "energyDb": [
+    -9.871149072025474,
+    -9.209145872535071,
+    -8.586674317789917
+  ],
+  "vadEvents": [
+    {
+      "event": "start",
+      "frame": 40
+    },
+    {
+      "event": "end",
+      "frame": 144
+    }
+  ],
+  "turns": [
+    {
+      "speaker": 0,
+      "startMs": 300,
+      "endMs": 1740
+    },
+    {
+      "speaker": 1,
+      "startMs": 2000,
+      "endMs": 3440
+    },
+    {
+      "speaker": 0,
+      "startMs": 3700,
+      "endMs": 5140
+    }
+  ],
+  "speakerCount": 2,
+  "embA": [
+    0.18016682001555367,
+    -0.019190472695145188,
+    0.7568588915644967,
+    0.031232980889428115,
+    -0.5021188738641413,
+    0.05343680186360735,
+    -0.013811993192175319,
+    -0.08193052997972225,
+    0.06518500510805322,
+    0.15372182334684314,
+    0.31502262407408027,
+    0.01654036803569222,
+    0.003912470120791022,
+    0.016820153109803365,
+    0.044482650356249286,
+    0.022681601228464923,
+    0.0278567169080923,
+    0.002228604448507761,
+    0.01603263687520402,
+    0.007322923139600094,
+    0.0024359923008605406,
+    0.008881783311947045,
+    0.004564942144020129,
+    0.009875391862005567
+  ],
+  "norm34": [
+    0.6,
+    0.8
+  ],
+  "prompt": "Spotkanie: Standup zespołu\n\nOstatnie wypowiedzi:\nAnna Kowalska: Cześć wszystkim, zaczynamy standup.\nJan Nowak: Hej, słychać mnie? Mam *gwiazdkę* i _podkreślenie_.\nAnna Kowalska: Lecimy dalej.\n\nPytanie, na które masz odpowiedzieć:\nA jakie RPO i RTO to nam daje?",
+  "ringA": [
+    0.10000000149011612,
+    0.10100000351667404,
+    0.10199999809265137,
+    0.10300000011920929,
+    0.10400000214576721,
+    0.10499999672174454,
+    0.10599999874830246,
+    0.10700000077486038,
+    0.1080000028014183,
+    0.10899999737739563,
+    0.10999999940395355,
+    0.11100000143051147,
+    0.1120000034570694,
+    0.11299999803304672,
+    0.11400000005960464,
+    0.11500000208616257,
+    0.11599999666213989,
+    0.11699999868869781,
+    0.11800000071525574,
+    0.11900000274181366,
+    0.11999999731779099,
+    0.12099999934434891,
+    0.12200000137090683,
+    0.12300000339746475,
+    0.12399999797344208,
+    0.125,
+    0.12600000202655792,
+    0.12700000405311584,
+    0.12800000607967377,
+    0.1289999932050705,
+    0.12999999523162842,
+    0.13099999725818634,
+    0.13199999928474426,
+    0.13300000131130219,
+    0.1340000033378601,
+    0.13500000536441803,
+    0.13600000739097595,
+    0.13699999451637268,
+    0.1379999965429306,
+    0.13899999856948853,
+    0.14000000059604645,
+    0.14100000262260437,
+    0.1420000046491623,
+    0.14300000667572021,
+    0.14399999380111694,
+    0.14499999582767487,
+    0.1459999978542328,
+    0.1469999998807907,
+    0.14800000190734863,
+    0.14900000393390656,
+    0.15000000596046448,
+    0.1509999930858612,
+    0.15199999511241913,
+    0.15299999713897705,
+    0.15399999916553497,
+    0.1550000011920929,
+    0.15600000321865082,
+    0.15700000524520874,
+    0.15800000727176666,
+    0.1589999943971634,
+    0.1599999964237213,
+    0.16099999845027924,
+    0.16200000047683716,
+    0.16300000250339508,
+    0.164000004529953,
+    0.16500000655651093,
+    0.16599999368190765,
+    0.16699999570846558,
+    0.1679999977350235,
+    0.16899999976158142,
+    0.17000000178813934,
+    0.17100000381469727,
+    0.1720000058412552,
+    0.17299999296665192,
+    0.17399999499320984,
+    0.17499999701976776,
+    0.17599999904632568,
+    0.1770000010728836,
+    0.17800000309944153,
+    0.17900000512599945,
+    0.18000000715255737,
+    0.1809999942779541,
+    0.18199999630451202,
+    0.18299999833106995,
+    0.18400000035762787,
+    0.1850000023841858,
+    0.1860000044107437,
+    0.18700000643730164,
+    0.18799999356269836,
+    0.1889999955892563,
+    0.1899999976158142,
+    0.19099999964237213,
+    0.19200000166893005,
+    0.19300000369548798,
+    0.1940000057220459,
+    0.19499999284744263,
+    0.19599999487400055,
+    0.19699999690055847,
+    0.1979999989271164,
+    0.19900000095367432,
+    0.20000000298023224,
+    0.20100000500679016,
+    0.20200000703334808,
+    0.2029999941587448,
+    0.20399999618530273,
+    0.20499999821186066,
+    0.20600000023841858,
+    0.2070000022649765,
+    0.20800000429153442,
+    0.20900000631809235,
+    0.20999999344348907,
+    0.210999995470047,
+    0.21199999749660492,
+    0.21299999952316284,
+    0.21400000154972076,
+    0.2150000035762787,
+    0.2160000056028366,
+    0.21699999272823334,
+    0.21799999475479126,
+    0.21899999678134918,
+    0.2199999988079071,
+    0.22100000083446503,
+    0.22200000286102295,
+    0.22300000488758087,
+    0.2240000069141388,
+    0.22499999403953552,
+    0.22599999606609344,
+    0.22699999809265137,
+    0.2280000001192093,
+    0.2290000021457672,
+    0.23000000417232513,
+    0.23100000619888306,
+    0.23199999332427979,
+    0.2329999953508377,
+    0.23399999737739563,
+    0.23499999940395355,
+    0.23600000143051147,
+    0.2370000034570694,
+    0.23800000548362732,
+    0.23899999260902405,
+    0.23999999463558197,
+    0.2409999966621399,
+    0.24199999868869781,
+    0.24300000071525574,
+    0.24400000274181366,
+    0.24500000476837158,
+    0.2460000067949295,
+    0.24699999392032623,
+    0.24799999594688416,
+    0.24899999797344208,
+    0.25,
+    0.25099998712539673,
+    0.25200000405311584,
+    0.2529999911785126,
+    0.2540000081062317,
+    0.2549999952316284,
+    0.25600001215934753,
+    0.25699999928474426,
+    0.257999986410141,
+    0.2590000033378601,
+    0.25999999046325684,
+    0.26100000739097595,
+    0.2619999945163727,
+    0.2630000114440918,
+    0.2639999985694885,
+    0.26499998569488525,
+    0.26600000262260437,
+    0.2669999897480011,
+    0.2680000066757202,
+    0.26899999380111694,
+    0.27000001072883606,
+    0.2709999978542328,
+    0.2720000147819519,
+    0.27300000190734863,
+    0.27399998903274536,
+    0.2750000059604645,
+    0.2759999930858612,
+    0.2770000100135803,
+    0.27799999713897705,
+    0.27900001406669617,
+    0.2800000011920929,
+    0.2809999883174896,
+    0.28200000524520874,
+    0.28299999237060547,
+    0.2840000092983246,
+    0.2849999964237213,
+    0.28600001335144043,
+    0.28700000047683716,
+    0.2879999876022339,
+    0.289000004529953,
+    0.28999999165534973,
+    0.29100000858306885,
+    0.2919999957084656,
+    0.2930000126361847,
+    0.2939999997615814,
+    0.29499998688697815,
+    0.29600000381469727,
+    0.296999990940094,
+    0.2980000078678131,
+    0.29899999499320984
+  ],
+  "ringB": [
+    0.20000000298023224,
+    0.20100000500679016,
+    0.20200000703334808,
+    0.2029999941587448,
+    0.20399999618530273,
+    0.20499999821186066,
+    0.20600000023841858,
+    0.2070000022649765,
+    0.20800000429153442,
+    0.20900000631809235,
+    0.20999999344348907,
+    0.210999995470047,
+    0.21199999749660492,
+    0.21299999952316284,
+    0.21400000154972076,
+    0.2150000035762787,
+    0.2160000056028366,
+    0.21699999272823334,
+    0.21799999475479126,
+    0.21899999678134918,
+    0.2199999988079071,
+    0.22100000083446503,
+    0.22200000286102295,
+    0.22300000488758087,
+    0.2240000069141388,
+    0.22499999403953552,
+    0.22599999606609344,
+    0.22699999809265137,
+    0.2280000001192093,
+    0.2290000021457672,
+    0.23000000417232513,
+    0.23100000619888306,
+    0.23199999332427979,
+    0.2329999953508377,
+    0.23399999737739563,
+    0.23499999940395355,
+    0.23600000143051147,
+    0.2370000034570694,
+    0.23800000548362732,
+    0.23899999260902405,
+    0.23999999463558197,
+    0.2409999966621399,
+    0.24199999868869781,
+    0.24300000071525574,
+    0.24400000274181366,
+    0.24500000476837158,
+    0.2460000067949295,
+    0.24699999392032623,
+    0.24799999594688416,
+    0.24899999797344208,
+    0.25,
+    0.25099998712539673,
+    0.25200000405311584,
+    0.2529999911785126,
+    0.2540000081062317,
+    0.2549999952316284,
+    0.25600001215934753,
+    0.25699999928474426,
+    0.257999986410141,
+    0.2590000033378601,
+    0.25999999046325684,
+    0.26100000739097595,
+    0.2619999945163727,
+    0.2630000114440918,
+    0.2639999985694885,
+    0.26499998569488525,
+    0.26600000262260437,
+    0.2669999897480011,
+    0.2680000066757202,
+    0.26899999380111694,
+    0.27000001072883606,
+    0.2709999978542328,
+    0.2720000147819519,
+    0.27300000190734863,
+    0.27399998903274536,
+    0.2750000059604645,
+    0.2759999930858612,
+    0.2770000100135803,
+    0.27799999713897705,
+    0.27900001406669617,
+    0.2800000011920929,
+    0.2809999883174896,
+    0.28200000524520874,
+    0.28299999237060547,
+    0.2840000092983246,
+    0.2849999964237213,
+    0.28600001335144043,
+    0.28700000047683716,
+    0.2879999876022339,
+    0.289000004529953,
+    0.28999999165534973,
+    0.29100000858306885,
+    0.2919999957084656,
+    0.2930000126361847,
+    0.2939999997615814,
+    0.29499998688697815,
+    0.29600000381469727,
+    0.296999990940094,
+    0.2980000078678131,
+    0.29899999499320984,
+    0.30000001192092896,
+    0.3009999990463257,
+    0.3019999861717224,
+    0.30300000309944153,
+    0.30399999022483826,
+    0.3050000071525574,
+    0.3059999942779541,
+    0.3070000112056732,
+    0.30799999833106995,
+    0.3089999854564667,
+    0.3100000023841858,
+    0.3109999895095825,
+    0.31200000643730164,
+    0.31299999356269836,
+    0.3140000104904175,
+    0.3149999976158142,
+    0.3160000145435333,
+    0.31700000166893005,
+    0.3179999887943268,
+    0.3190000057220459,
+    0.3199999928474426,
+    0.32100000977516174,
+    0.32199999690055847,
+    0.3230000138282776,
+    0.3240000009536743,
+    0.32499998807907104,
+    0.32600000500679016,
+    0.3269999921321869,
+    0.328000009059906,
+    0.32899999618530273,
+    0.33000001311302185,
+    0.3310000002384186,
+    0.3319999873638153,
+    0.3330000042915344,
+    0.33399999141693115,
+    0.33500000834465027,
+    0.335999995470047,
+    0.3370000123977661,
+    0.33799999952316284,
+    0.33899998664855957,
+    0.3400000035762787,
+    0.3409999907016754,
+    0.34200000762939453,
+    0.34299999475479126,
+    0.3440000116825104,
+    0.3449999988079071,
+    0.34599998593330383,
+    0.34700000286102295,
+    0.3479999899864197,
+    0.3490000069141388,
+    0.3499999940395355,
+    0.35100001096725464,
+    0.35199999809265137,
+    0.3529999852180481,
+    0.3540000021457672,
+    0.35499998927116394,
+    0.35600000619888306,
+    0.3569999933242798,
+    0.3580000102519989,
+    0.35899999737739563,
+    0.36000001430511475,
+    0.3610000014305115,
+    0.3619999885559082,
+    0.3630000054836273,
+    0.36399999260902405,
+    0.36500000953674316,
+    0.3659999966621399,
+    0.367000013589859,
+    0.36800000071525574,
+    0.36899998784065247,
+    0.3700000047683716,
+    0.3709999918937683,
+    0.3720000088214874,
+    0.37299999594688416,
+    0.37400001287460327,
+    0.375,
+    0.37599998712539673,
+    0.37700000405311584,
+    0.3779999911785126,
+    0.3790000081062317,
+    0.3799999952316284,
+    0.38100001215934753,
+    0.38199999928474426,
+    0.382999986410141,
+    0.3840000033378601,
+    0.38499999046325684,
+    0.38600000739097595,
+    0.3869999945163727,
+    0.3880000114440918,
+    0.3889999985694885,
+    0.38999998569488525,
+    0.39100000262260437,
+    0.3919999897480011,
+    0.3930000066757202,
+    0.39399999380111694,
+    0.39500001072883606,
+    0.3959999978542328,
+    0.3970000147819519,
+    0.39800000190734863,
+    0.39899998903274536
+  ],
+  "ringMeta": {
+    "oldestMs": 200,
+    "newestMs": 1200,
+    "written": 1200,
+    "outOfRange": true,
+    "inverted": true
+  },
+  "wavBytes": [
+    82,
+    73,
+    70,
+    70,
+    48,
+    0,
+    0,
+    0,
+    87,
+    65,
+    86,
+    69,
+    102,
+    109,
+    116,
+    32,
+    16,
+    0,
+    0,
+    0,
+    1,
+    0,
+    1,
+    0,
+    128,
+    62,
+    0,
+    0,
+    0,
+    125,
+    0,
+    0,
+    2,
+    0,
+    16,
+    0,
+    100,
+    97,
+    116,
+    97,
+    12,
+    0,
+    0,
+    0,
+    0,
+    0,
+    255,
+    63,
+    0,
+    192,
+    255,
+    127,
+    0,
+    128,
+    255,
+    31
+  ],
+  "cleanCases": [
+    {
+      "input": " Zastanawiamy się nad polityką backupów.\n Mamy snapshoty.\n",
+      "result": "Zastanawiamy się nad polityką backupów. Mamy snapshoty."
+    },
+    {
+      "input": "[BLANK_AUDIO]",
+      "result": ""
+    },
+    {
+      "input": "tekst [Muzyka] dalej (szum) koniec",
+      "result": "tekst dalej koniec"
+    },
+    {
+      "input": "  wiele   spacji  ",
+      "result": "wiele spacji"
+    },
+    {
+      "input": " Dziękuje za uwagę. Okej, a powiedz mi, jakbyś to zrobił?",
+      "result": "Okej, a powiedz mi, jakbyś to zrobił?"
+    },
+    {
+      "input": "Zdjękuje za oglądanie! A z jakich menedżerów stanu korzystałeś?",
+      "result": "A z jakich menedżerów stanu korzystałeś?"
+    },
+    {
+      "input": "Dziękuję za uwagę.",
+      "result": ""
+    },
+    {
+      "input": " jest firmą outs\nourcingową.\n Najpóźniej w poniedz\niałek.\n",
+      "result": "jest firmą outsourcingową. Najpóźniej w poniedziałek."
+    },
+    {
+      "input": " Google\nCloud, B2\nB, dobry,\nzaczynamy.",
+      "result": "Google Cloud, B2 B, dobry, zaczynamy."
+    }
+  ]
+}

@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <title>call-whisper</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute">
+    <symbol id="i-import" viewBox="0 0 24 24"><path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></symbol>
+    <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M19 9l1.25-2.75L23 5l-2.75-1.25L19 1l-1.25 2.75L15 5l2.75 1.25L19 9zm-7.5.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12l-5.5-2.5zM19 15l-1.25 2.75L15 19l2.75 1.25L19 23l1.25-2.75L23 19l-2.75-1.25L19 15z"/></symbol>
+    <symbol id="i-overlay" viewBox="0 0 24 24"><path d="M19 7h-8v6h8V7zm2-4H3c-1.1 0-2 .9-2 2v14c0 1.1.9 1.98 2 1.98h18c1.1 0 2-.88 2-1.98V5c0-1.1-.9-2-2-2zm0 16.01H3V4.98h18v14.03z"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></symbol>
+    <symbol id="i-export" viewBox="0 0 24 24"><path d="M16 5l-1.42 1.42-1.59-1.59V16h-1.98V4.83L9.42 6.42 8 5l4-4 4 4zm4 5v11c0 1.1-.9 2-2 2H6c-1.11 0-2-.9-2-2V10c0-1.11.89-2 2-2h3v2H6v11h12V10h-3V8h3c1.1 0 2 .89 2 2z"/></symbol>
+    <symbol id="i-ready" viewBox="0 0 24 24"><path d="M23 12l-2.44-2.79.34-3.69-3.61-.82-1.89-3.2L12 2.96 8.6 1.5 6.71 4.69 3.1 5.5l.34 3.7L1 12l2.44 2.79-.34 3.7 3.61.82L8.6 22.5l3.4-1.47 3.4 1.46 1.89-3.19 3.61-.82-.34-3.69L23 12zm-12.91 4.72l-3.8-3.81 1.48-1.48 2.32 2.33 5.85-5.87 1.48 1.48-7.33 7.35z"/></symbol>
+    <symbol id="i-warning" viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></symbol>
+    <symbol id="i-desktop" viewBox="0 0 24 24"><path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/></symbol>
+    <symbol id="i-video" viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></symbol>
+    <symbol id="i-wave" viewBox="0 0 24 24"><path d="M7 18h2V6H7v12zm4 4h2V2h-2v20zm-8-8h2v-4H3v4zm12 4h2V6h-2v12zm4-8v4h2v-4h-2z"/></symbol>
+    <symbol id="i-attach" viewBox="0 0 24 24"><path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><path d="M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6z"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></symbol>
+    <symbol id="i-person" viewBox="0 0 24 24"><path d="M9 13c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></symbol>
+    <symbol id="i-sync" viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></symbol>
+  </svg>
+
+  <nav class="rail">
+    <button class="rail-item" id="r-import" title="Transkrybuj nagranie albo wideo (mp4, mov, m4a, mp3, wav). Można też upuścić plik na transkrypt.">
+      <div class="pill"><svg class="icon"><use href="#i-import"/></svg></div><span>Importuj</span>
+    </button>
+    <button class="rail-item" id="r-hints"><div class="pill"><svg class="icon"><use href="#i-sparkles"/></svg></div><span>Podpowiedzi</span></button>
+    <button class="rail-item" id="r-overlay" title="Pływające okno z odpowiedziami, zostaje na wierzchu nad rozmową">
+      <div class="pill"><svg class="icon"><use href="#i-overlay"/></svg></div><span>Nakładka</span>
+    </button>
+    <button class="rail-item" id="r-copy" title="Kopiuj wszystkie wypowiedzi do wklejenia w czat (Ctrl+Shift+C)">
+      <div class="pill"><svg class="icon"><use href="#i-copy"/></svg></div><span>Kopiuj</span>
+    </button>
+    <button class="rail-item" id="r-export" title="Eksport"><div class="pill"><svg class="icon"><use href="#i-export"/></svg></div><span>Eksport</span></button>
+    <div class="spacer"></div>
+    <button class="rail-item" id="r-ready" title="Co jest potrzebne, żeby wszystko działało">
+      <div class="pill"><svg class="icon"><use href="#i-ready"/></svg></div><span>Gotowość</span>
+    </button>
+    <button class="rail-item" id="r-settings" title="Ustawienia (Ctrl+,)">
+      <div class="pill"><svg class="icon"><use href="#i-settings"/></svg></div><span>Ustawienia</span>
+    </button>
+  </nav>
+
+  <main>
+    <div class="top-bar">
+      <svg class="icon logo"><use href="#i-wave"/></svg>
+      <h1 id="title">call-whisper</h1>
+    </div>
+    <div class="banner hidden" id="meeting">
+      <svg class="icon"><use href="#i-phone"/></svg>
+      <div class="grow"><b id="meeting-name"></b><br><small>Zapisać transkrypt?</small></div>
+      <button class="btn-filled" id="meeting-listen">Słuchaj</button>
+    </div>
+
+    <div class="cards">
+      <section class="card transcript" id="transcript">
+        <div class="selection-bar hidden" id="selection-bar">
+          <span class="grow" id="selection-count"></span>
+          <button class="btn-text" id="sel-all">Zaznacz wszystko</button>
+          <button class="btn-text" id="sel-clear">Wyczyść</button>
+          <button class="btn-filled" id="sel-copy">Kopiuj</button>
+        </div>
+        <div class="empty" id="empty">
+          <div class="badge"><svg class="icon"><use href="#i-mic"/></svg></div>
+          <h2 id="empty-title">Cisza</h2>
+          <p id="empty-text"></p>
+          <button class="btn-outlined" id="empty-import"><svg class="icon"><use href="#i-import"/></svg>Importuj nagranie</button>
+        </div>
+        <div class="scroll hidden" id="scroll"><div class="segments" id="segments"></div></div>
+
+        <div class="fab-area">
+          <div class="chip-row" id="sources">
+            <button class="chip" id="src-system" title="Dźwięk z komputera: to, co słychać z rozmowy albo odtwarzanego materiału">
+              <svg class="icon"><use href="#i-desktop"/></svg><span>Komputer</span>
+            </button>
+            <button class="chip" id="src-mic"><svg class="icon"><use href="#i-mic"/></svg><span id="mic-name">Mikrofon</span></button>
+            <button class="chev" id="mic-pick" title="Wybierz mikrofon"><svg class="icon"><use href="#i-more"/></svg></button>
+          </div>
+          <div class="chip-row" id="modes">
+            <button class="chip" id="mode-audio" title="Tylko transkrypcja dźwięku, bez OBS"><svg class="icon"><use href="#i-wave"/></svg><span>Sam dźwięk</span></button>
+            <button class="chip" id="mode-obs" title="„Słuchaj” uruchamia też nagrywanie wideo w OBS; transkrypt ląduje obok filmu"><svg class="icon"><use href="#i-video"/></svg><span>Dźwięk + OBS</span></button>
+          </div>
+          <button class="fab" id="listen"><svg class="icon"><use href="#i-mic"/></svg><span>Słuchaj</span></button>
+        </div>
+      </section>
+
+      <section class="card assistant">
+        <header><h3>Podpowiedzi</h3><small id="assistant-label"></small></header>
+        <div class="scroll"><div class="answers" id="answers"></div></div>
+        <div class="question">
+          <div class="attachment hidden" id="attachment">
+            <img id="attachment-img" alt="">
+            <div class="grow"><b>Zrzut ekranu</b><br><small id="attachment-size"></small></div>
+            <button class="icon-btn" id="attachment-remove" title="Usuń załącznik"><svg class="icon"><use href="#i-close"/></svg></button>
+          </div>
+          <div class="field">
+            <button class="icon-btn" id="attach" title="Dołącz zrzut ze schowka (albo wklej Ctrl+V)"><svg class="icon"><use href="#i-attach"/></svg></button>
+            <textarea id="ask" rows="1" placeholder="Zapytaj o cokolwiek…"></textarea>
+            <button class="send" id="send" disabled title="Wyślij (Ctrl+Enter)"><svg class="icon"><use href="#i-up"/></svg></button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="linear hidden" id="progress"></div>
+    <div class="status">
+      <span class="dot hidden" id="rec-dot"></span>
+      <span class="grow" id="status">Gotowy</span>
+      <span class="info hidden" id="update"></span>
+      <span class="ok hidden" id="flash"></span>
+      <span class="bad hidden" id="error"></span>
+    </div>
+  </main>
+
+  <dialog id="ready-dialog">
+    <h2>Gotowość</h2>
+    <div id="ready-list"></div>
+    <div class="actions"><button class="btn-text" id="ready-close">Zamknij</button></div>
+  </dialog>
+
+  <dialog id="settings-dialog">
+    <h2>Ustawienia</h2>
+    <div class="form" id="settings-form"></div>
+    <div class="actions">
+      <button class="btn-text" id="settings-cancel">Anuluj</button>
+      <button class="btn-filled" id="settings-save">Zapisz</button>
+    </div>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>

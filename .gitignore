@@ -1,0 +1,4 @@
+target/
+vendor/*
+!vendor/.gitkeep
+src-tauri/gen/

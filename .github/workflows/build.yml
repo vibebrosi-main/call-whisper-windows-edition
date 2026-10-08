@@ -1,0 +1,108 @@
+# Każdy push na main: testy, instalator .exe i wydanie na GitHubie.
+# Zainstalowana aplikacja sama sprawdza `latest.json` z ostatniego wydania
+# i aktualizuje się (tylko pobiera — niczego nie wysyła).
+name: build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  WHISPER_CPP_VERSION: v1.7.6
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Testy rdzenia
+        run: cargo test -p cw-core
+
+      - name: Cache silnika mowy
+        id: whisper-cache
+        uses: actions/cache@v4
+        with:
+          path: vendor/whisper
+          key: whisper-${{ env.WHISPER_CPP_VERSION }}-vulkan-cpu-v1
+
+      - name: Vulkan SDK
+        if: steps.whisper-cache.outputs.cache-hit != 'true'
+        uses: jakoch/install-vulkan-sdk-action@v1
+        with:
+          install_runtime: false
+          cache: true
+
+      # Dwie wersje: Vulkan (każde GPU) i CPU (zapas, gdy sterownik nie
+      # obsługuje Vulkana). Statycznie, żeby nie wozić DLL-i ggml.
+      # Instrukcje CPU ustawione jawnie, a nie „native": build ma ruszyć
+      # na każdym procesorze z AVX2 (od ~2013), nie tylko na maszynie CI.
+      - name: Buduję whisper.cpp
+        if: steps.whisper-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch $env:WHISPER_CPP_VERSION https://github.com/ggml-org/whisper.cpp whisper-src
+          $common = @("-DBUILD_SHARED_LIBS=OFF", "-DWHISPER_BUILD_TESTS=OFF", "-DWHISPER_BUILD_EXAMPLES=ON",
+                      "-DWHISPER_BUILD_SERVER=ON", "-DGGML_NATIVE=OFF", "-DGGML_AVX=ON", "-DGGML_AVX2=ON",
+                      "-DGGML_FMA=ON", "-DGGML_F16C=ON", "-DWHISPER_SDL2=OFF")
+          cmake -S whisper-src -B build-vulkan @common -DGGML_VULKAN=ON
+          cmake --build build-vulkan --config Release --target whisper-server -j 4
+          cmake -S whisper-src -B build-cpu @common
+          cmake --build build-cpu --config Release --target whisper-server -j 4
+          New-Item -ItemType Directory -Force vendor/whisper/vulkan, vendor/whisper/cpu | Out-Null
+          Copy-Item build-vulkan/bin/Release/*.exe vendor/whisper/vulkan/
+          Copy-Item build-vulkan/bin/Release/*.dll vendor/whisper/vulkan/ -ErrorAction SilentlyContinue
+          Copy-Item build-cpu/bin/Release/*.exe vendor/whisper/cpu/
+          Copy-Item build-cpu/bin/Release/*.dll vendor/whisper/cpu/ -ErrorAction SilentlyContinue
+          Get-ChildItem -Recurse vendor/whisper
+
+      # ffmpeg do importu nagrań i wideo (mp4, mov, m4a, mp3...).
+      - name: ffmpeg
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip -OutFile ffmpeg.zip
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg-src
+          New-Item -ItemType Directory -Force vendor/ffmpeg | Out-Null
+          Get-ChildItem -Recurse ffmpeg-src -Filter ffmpeg.exe | Select-Object -First 1 | Copy-Item -Destination vendor/ffmpeg/
+
+      # Wersja rośnie z każdym buildem — inaczej updater nie widzi nowości.
+      - name: Wersja
+        shell: pwsh
+        env:
+          HAS_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+        run: |
+          $version = "0.1.${{ github.run_number }}"
+          $conf = Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          $conf.version = $version
+          # Bez klucza updatera instalator i tak powstaje, tylko bez
+          # paczki do samoczynnej aktualizacji.
+          if ($env:HAS_KEY -ne "true") { $conf.bundle.createUpdaterArtifacts = $false }
+          $conf | ConvertTo-Json -Depth 32 | Set-Content src-tauri/tauri.conf.json -Encoding utf8
+          "VERSION=$version" >> $env:GITHUB_ENV
+
+      - name: Instalator
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        with:
+          projectPath: src-tauri
+          tagName: ${{ github.event_name == 'push' && format('v{0}', env.VERSION) || '' }}
+          releaseName: call-whisper ${{ env.VERSION }}
+          releaseBody: Instalator call-whisper-${{ env.VERSION }} dla Windows. Pobierz plik *_x64-setup.exe i uruchom.
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: call-whisper-setup
+          path: target/release/bundle/nsis/*.exe

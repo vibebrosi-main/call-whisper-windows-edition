@@ -89,7 +89,7 @@ jobs:
           function Fetch($url, $out, $sha) {
             Invoke-WebRequest $url -OutFile $out
             $actual = (Get-FileHash $out -Algorithm SHA256).Hash
-            if ($actual -ne $sha.ToUpper()) { throw "$out: zła suma SHA-256 ($actual)" }
+            if ($actual -ne $sha.ToUpper()) { throw "${out}: zła suma SHA-256 ($actual)" }
           }
           Fetch https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.12.23/sherpa-onnx-v1.12.23-win-x64-shared-MT-Release-no-tts.tar.bz2 sherpa.tar.bz2 81f08f3f12a0d2377923eca3b288b895e1d18e45a1eb99478e3a32a43c58b9c0
           Fetch https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2 seg.tar.bz2 24615ee884c897d9d2ba09bb4d30da6bb1b15e685065962db5b02e76e4996488

@@ -11,6 +11,11 @@ on:
 permissions:
   contents: write
 
+# Nowy push anuluje build poprzedniego — wydanie ma powstać z najnowszego.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   WHISPER_CPP_VERSION: v1.7.6
 
@@ -68,6 +73,10 @@ jobs:
         shell: pwsh
         run: |
           Invoke-WebRequest https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip -OutFile ffmpeg.zip
+          # Suma od wydawcy: uszkodzony albo podmieniony plik nie trafi do instalatora.
+          $expected = (Invoke-WebRequest https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip.sha256).Content.Trim().Split(" ")[0]
+          $actual = (Get-FileHash ffmpeg.zip -Algorithm SHA256).Hash
+          if ($actual -ne $expected.ToUpper()) { throw "ffmpeg: zła suma SHA-256 ($actual != $expected)" }
           Expand-Archive ffmpeg.zip -DestinationPath ffmpeg-src
           New-Item -ItemType Directory -Force vendor/ffmpeg | Out-Null
           Get-ChildItem -Recurse ffmpeg-src -Filter ffmpeg.exe | Select-Object -First 1 | Copy-Item -Destination vendor/ffmpeg/
@@ -101,6 +110,14 @@ jobs:
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
+
+      # Instalator bez silnika albo ffmpeg „działa", ale nic nie transkrybuje.
+      - name: Sprawdzam zasoby w paczce
+        shell: pwsh
+        run: |
+          foreach ($f in "vendor/whisper/vulkan/whisper-server.exe", "vendor/whisper/cpu/whisper-server.exe", "vendor/ffmpeg/ffmpeg.exe") {
+            if (-not (Test-Path "target/release/$f")) { throw "Brak $f w paczce" }
+          }
 
       - uses: actions/upload-artifact@v4
         with:

@@ -20,7 +20,6 @@ use tokio::task::JoinHandle;
 
 #[derive(Clone, Debug)]
 pub struct Update {
-    pub source: AudioSource,
     /// Klucz segmentu w `TranscriptStore` — stały przez całą wypowiedź.
     pub key: String,
     pub speaker: String,
@@ -98,8 +97,18 @@ impl Pipeline {
 enum Msg {
     Chunk(PcmChunk),
     Tick,
-    Partial { key: String, start_ms: f64, result: Result<String, String> },
-    Final { key: String, speaker: String, start_ms: f64, fallback: String, result: Result<String, String> },
+    Partial {
+        key: String,
+        start_ms: f64,
+        result: Result<String, String>,
+    },
+    Final {
+        key: String,
+        speaker: String,
+        start_ms: f64,
+        fallback: String,
+        result: Result<String, String>,
+    },
     Cancel,
 }
 
@@ -189,7 +198,10 @@ impl State {
         diarizer.on_turn = Box::new(move |turn| {
             let _ = diar_tx.send(DiarEvent::Turn(turn));
         });
-        let vocabulary: String = Text::normalize(&config.vocabulary).chars().take(300).collect();
+        let vocabulary: String = Text::normalize(&config.vocabulary)
+            .chars()
+            .take(300)
+            .collect();
         Self {
             source: config.source,
             identify_speakers: config.identify_speakers,
@@ -220,14 +232,23 @@ impl State {
             match msg {
                 Msg::Chunk(chunk) => self.process(chunk),
                 Msg::Tick => self.tick(),
-                Msg::Partial { key, start_ms, result } => self.partial_done(key, start_ms, result),
-                Msg::Final { key, speaker, start_ms, fallback, result } => {
-                    self.final_done(key, speaker, start_ms, fallback, result)
-                }
+                Msg::Partial {
+                    key,
+                    start_ms,
+                    result,
+                } => self.partial_done(key, start_ms, result),
+                Msg::Final {
+                    key,
+                    speaker,
+                    start_ms,
+                    fallback,
+                    result,
+                } => self.final_done(key, speaker, start_ms, fallback, result),
                 Msg::Cancel => break,
             }
             self.drain_diarizer();
-            self.speakers.store(self.diarizer.speaker_count(), Ordering::Relaxed);
+            self.speakers
+                .store(self.diarizer.speaker_count(), Ordering::Relaxed);
         }
         if let Some(task) = self.in_flight.take() {
             task.abort();
@@ -254,7 +275,8 @@ impl State {
 
     fn process(&mut self, chunk: PcmChunk) {
         self.last_chunk_at = Instant::now();
-        self.clock_offset_ms = chunk.start_ms - self.samples_ingested as f64 / ASR_SAMPLE_RATE * 1000.0;
+        self.clock_offset_ms =
+            chunk.start_ms - self.samples_ingested as f64 / ASR_SAMPLE_RATE * 1000.0;
         self.samples_ingested += chunk.samples.len();
 
         for frame in self.framer.push(&chunk.samples) {
@@ -301,7 +323,9 @@ impl State {
 
     fn tick(&mut self) {
         // Dźwięk ucichł i przestał przychodzić — domykamy turę sami.
-        if self.utterance.is_some() && self.last_chunk_at.elapsed().as_secs_f64() * 1000.0 > AUDIO_STALL_MS {
+        if self.utterance.is_some()
+            && self.last_chunk_at.elapsed().as_secs_f64() * 1000.0 > AUDIO_STALL_MS
+        {
             self.diarizer.flush(self.last_frame_ms);
             return;
         }
@@ -318,7 +342,13 @@ impl State {
             return;
         }
         let to = now.min(u.start_ms + MAX_UTTERANCE_MS);
-        let Some(pcm) = self.ring.read_range(u.start_ms - PAD_MS, to).filter(|p| !p.is_empty()) else { return };
+        let Some(pcm) = self
+            .ring
+            .read_range(u.start_ms - PAD_MS, to)
+            .filter(|p| !p.is_empty())
+        else {
+            return;
+        };
 
         // Runda przyrostowa: pełna transkrypcja wypowiedzi od początku.
         // Encoder whispera kosztuje tyle samo niezależnie od długości audio,
@@ -328,8 +358,15 @@ impl State {
         let prompt = self.whisper_prompt();
         let tx = self.tx.clone();
         self.in_flight = Some(tokio::spawn(async move {
-            let result = whisper.transcribe(&pcm, &prompt, Quality::FAST).await.map_err(describe);
-            let _ = tx.send(Msg::Partial { key, start_ms, result });
+            let result = whisper
+                .transcribe(&pcm, &prompt, Quality::FAST)
+                .await
+                .map_err(describe);
+            let _ = tx.send(Msg::Partial {
+                key,
+                start_ms,
+                result,
+            });
         }));
     }
 
@@ -341,14 +378,23 @@ impl State {
         // Wypowiedź mogła się w międzyczasie domknąć — wynik dotyczy czegoś,
         // czego już nie ma.
         let label = self.current_label();
-        let Some(u) = self.utterance.as_mut().filter(|u| u.key == key) else { return };
+        let Some(u) = self.utterance.as_mut().filter(|u| u.key == key) else {
+            return;
+        };
         if text.is_empty() || text == u.last_text {
             return;
         }
         u.last_text = text.clone();
         u.speaker = Some(label.clone());
         let start = self.session_ms(start_ms);
-        self.emit(Update { source: self.source, key, speaker: label, text, is_final: false, start_ms: start, discard: false });
+        self.emit(Update {
+            key,
+            speaker: label,
+            text,
+            is_final: false,
+            start_ms: start,
+            discard: false,
+        });
     }
 
     fn current_label(&self) -> String {
@@ -361,12 +407,21 @@ impl State {
     fn close_utterance(&mut self, turn: Turn) {
         // Wypowiedź przejmujemy od razu: następna tura może ruszyć, zanim
         // whisper odda wersję ostateczną tej.
-        let Some(u) = self.utterance.take() else { return };
+        let Some(u) = self.utterance.take() else {
+            return;
+        };
         let speaker = self.label(Some(turn.speaker));
         let start = self.session_ms(u.start_ms);
 
         if turn.end_ms - turn.start_ms < MIN_TURN_MS {
-            self.emit(Update { source: self.source, key: u.key, speaker, text: String::new(), is_final: true, start_ms: start, discard: true });
+            self.emit(Update {
+                key: u.key,
+                speaker,
+                text: String::new(),
+                is_final: true,
+                start_ms: start,
+                discard: true,
+            });
             return;
         }
 
@@ -377,23 +432,48 @@ impl State {
 
         let pcm = self
             .ring
-            .read_range(u.start_ms - PAD_MS, (turn.end_ms + PAD_MS).min(u.start_ms + MAX_UTTERANCE_MS))
+            .read_range(
+                u.start_ms - PAD_MS,
+                (turn.end_ms + PAD_MS).min(u.start_ms + MAX_UTTERANCE_MS),
+            )
             .filter(|p| !p.is_empty());
         let tx = self.tx.clone();
         let Some(pcm) = pcm else {
-            let _ = tx.send(Msg::Final { key: u.key, speaker, start_ms: u.start_ms, fallback: u.last_text, result: Ok(String::new()) });
+            let _ = tx.send(Msg::Final {
+                key: u.key,
+                speaker,
+                start_ms: u.start_ms,
+                fallback: u.last_text,
+                result: Ok(String::new()),
+            });
             return;
         };
         let whisper = self.whisper.clone();
         let prompt = self.whisper_prompt();
         self.finals.retain(|t| !t.is_finished());
         self.finals.push(tokio::spawn(async move {
-            let result = whisper.transcribe(&pcm, &prompt, Quality::ACCURATE).await.map_err(describe);
-            let _ = tx.send(Msg::Final { key: u.key, speaker, start_ms: u.start_ms, fallback: u.last_text, result });
+            let result = whisper
+                .transcribe(&pcm, &prompt, Quality::ACCURATE)
+                .await
+                .map_err(describe);
+            let _ = tx.send(Msg::Final {
+                key: u.key,
+                speaker,
+                start_ms: u.start_ms,
+                fallback: u.last_text,
+                result,
+            });
         }));
     }
 
-    fn final_done(&mut self, key: String, speaker: String, start_ms: f64, fallback: String, result: Result<String, String>) {
+    fn final_done(
+        &mut self,
+        key: String,
+        speaker: String,
+        start_ms: f64,
+        fallback: String,
+        result: Result<String, String>,
+    ) {
         let text = match result {
             Ok(text) if !text.is_empty() => text,
             Ok(_) => fallback,
@@ -410,14 +490,26 @@ impl State {
         }
         let start = self.session_ms(start_ms);
         let discard = text.is_empty();
-        self.emit(Update { source: self.source, key, speaker, text, is_final: true, start_ms: start, discard });
+        self.emit(Update {
+            key,
+            speaker,
+            text,
+            is_final: true,
+            start_ms: start,
+            discard,
+        });
     }
 
     /// Bez rozpoznawania mówcy zostaje podział, który i tak jest pewny:
     /// mikrofon to Ty, dźwięk komputera to reszta.
     fn label(&self, index: Option<usize>) -> String {
         if !self.identify_speakers {
-            return if self.source == AudioSource::Microphone { "Ty" } else { "Rozmówcy" }.into();
+            return if self.source == AudioSource::Microphone {
+                "Ty"
+            } else {
+                "Rozmówcy"
+            }
+            .into();
         }
         match self.source {
             AudioSource::Microphone => match index {
@@ -447,4 +539,70 @@ pub const UNKNOWN_SPEAKER: &str = "Rozmówca";
 /// Anulowanie to tu przerwane zadanie tokio, nie błąd — do kanału nie dociera.
 fn describe(err: WhisperError) -> String {
     err.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Cały łańcuch na prawdziwym nagraniu: `CW_TEST_AUDIO=plik CW_TEST_PORT=8898
+    /// cargo test -p call-whisper -- --ignored live_pipeline` (z działającym
+    /// whisper-server i ffmpeg w PATH).
+    #[tokio::test]
+    #[ignore]
+    async fn live_pipeline_transcribes_speech() {
+        let file = std::env::var("CW_TEST_AUDIO").expect("CW_TEST_AUDIO");
+        let port: u16 = std::env::var("CW_TEST_PORT")
+            .unwrap_or("8898".into())
+            .parse()
+            .unwrap();
+        let mut pcm = crate::media_import::decode(
+            std::path::Path::new("ffmpeg"),
+            std::path::Path::new(&file),
+        )
+        .unwrap();
+        // Cisza na końcu, żeby VAD domknął turę.
+        pcm.extend(std::iter::repeat(0.0).take(16_000 * 2));
+
+        let (events_tx, mut events) = mpsc::unbounded_channel();
+        let pipeline = Pipeline::start(
+            Config {
+                source: AudioSource::System,
+                whisper_port: port,
+                language_code: "pl".into(),
+                identify_speakers: false,
+                vocabulary: "React, Next.js".into(),
+            },
+            events_tx,
+        );
+        let send = pipeline.sender();
+        // Tempo zbliżone do rzeczywistego: paczki po 100 ms co 50 ms.
+        for (i, chunk) in pcm.chunks(1600).enumerate() {
+            send(PcmChunk {
+                samples: chunk.to_vec(),
+                start_ms: i as f64 * 100.0,
+            });
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+
+        let mut finals = Vec::new();
+        let mut partials = 0;
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+        while let Ok(Some(event)) = tokio::time::timeout_at(deadline, events.recv()).await {
+            match event {
+                Event::Update(u) if u.is_final && !u.discard => {
+                    finals.push(u.text.clone());
+                    break;
+                }
+                Event::Update(u) if !u.is_final => partials += 1,
+                Event::Update(_) => {}
+                Event::Error(e) => panic!("{e}"),
+            }
+        }
+        pipeline.cancel();
+        let text = finals.join(" ");
+        eprintln!("partials={partials} final={text:?}");
+        assert!(text.to_lowercase().contains("react"), "{text}");
+        assert!(partials > 0, "brak rund przyrostowych");
+    }
 }

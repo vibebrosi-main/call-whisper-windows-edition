@@ -58,7 +58,10 @@ pub async fn check(app: &AppHandle, force: bool) {
     };
     // Nie przerywamy rozmowy: instalacja restartuje aplikację.
     if rec.is_busy() {
-        rec.set_update(Some(format!("Nowa wersja {} — zainstaluję po nasłuchu", update.version)));
+        rec.set_update(Some(format!(
+            "Nowa wersja {} — zainstaluję po nasłuchu",
+            update.version
+        )));
         return;
     }
     rec.set_update(Some(format!("Pobieram wersję {}…", update.version)));

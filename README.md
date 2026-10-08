@@ -34,7 +34,8 @@ Testy rdzenia: `cargo test -p cw-core`.
 - [x] Etap 1: dźwięk komputera (WASAPI loopback) i mikrofon z wyborem
   urządzenia, whisper na żywo, transkrypt, kopiowanie, eksport, ustawienia,
   gotowość, aktualizacje
-- [ ] Etap 2: podpowiedzi (Claude Code, API), wykrywanie pytań, zrzuty ekranu
-- [ ] Etap 3: nakładka, pasek u góry ekranu, import nagrań
-- [ ] Etap 4: rozpoznawanie głosów, wykrywanie rozmów, OBS
+- [x] Etap 2: podpowiedzi (Claude Code, API), wykrywanie pytań, zrzuty ekranu
+- [x] Etap 3: nakładka, pasek u góry ekranu (ukryte w udostępnianiu ekranu), import nagrań
+- [x] Etap 4: wykrywanie rozmów, OBS
+- [ ] Rozpoznawanie głosów po rozmowie (sieć neuronowa; na macOS CoreML, tu ONNX)
 <!-- bump: 91e12f7 -->

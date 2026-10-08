@@ -88,6 +88,31 @@ impl Settings {
         self.language.chars().take(2).collect()
     }
 
+    /// Plik z opisem projektu; pusta ścieżka = domyślny w %APPDATA%.
+    pub fn project_context_file(&self) -> PathBuf {
+        if self.project_context_path.is_empty() {
+            config_dir().join("project-context.md")
+        } else {
+            PathBuf::from(&self.project_context_path)
+        }
+    }
+
+    /// Treść kontekstu projektu (trafia do każdego pytania). Tylko pliki
+    /// tekstowe i najwyżej 8000 znaków — tyle obiecuje interfejs.
+    pub fn project_context(&self) -> String {
+        let path = self.project_context_file();
+        let text_like = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| matches!(e.to_ascii_lowercase().as_str(), "md" | "txt" | "markdown"));
+        if !text_like {
+            return String::new();
+        }
+        std::fs::read_to_string(path)
+            .map(|t| t.chars().take(8000).collect())
+            .unwrap_or_default()
+    }
+
     pub fn load() -> Self {
         std::fs::read(settings_path())
             .ok()
@@ -107,12 +132,16 @@ impl Settings {
 
 /// %APPDATA%\call-whisper
 pub fn config_dir() -> PathBuf {
-    dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("call-whisper")
+    dirs::config_dir()
+        .unwrap_or_else(std::env::temp_dir)
+        .join("call-whisper")
 }
 
 /// %LOCALAPPDATA%\call-whisper — duże pliki (modele, logi, nagrania).
 pub fn data_dir() -> PathBuf {
-    dirs::data_local_dir().unwrap_or_else(std::env::temp_dir).join("call-whisper")
+    dirs::data_local_dir()
+        .unwrap_or_else(std::env::temp_dir)
+        .join("call-whisper")
 }
 
 pub fn settings_path() -> PathBuf {

@@ -27,7 +27,6 @@ impl AudioSource {
 }
 
 pub struct PcmChunk {
-    pub source: AudioSource,
     pub samples: Vec<f32>,
     /// Czas pierwszej próbki względem startu sesji, w ms.
     pub start_ms: f64,
@@ -46,7 +45,10 @@ pub fn input_devices() -> Vec<InputDevice> {
         .map(|devices| {
             devices
                 .filter_map(|d| d.name().ok())
-                .map(|name| InputDevice { id: name.clone(), name })
+                .map(|name| InputDevice {
+                    id: name.clone(),
+                    name,
+                })
                 .collect()
         })
         .unwrap_or_default()
@@ -56,7 +58,10 @@ pub fn default_input_device() -> Option<InputDevice> {
     cpal::default_host()
         .default_input_device()
         .and_then(|d| d.name().ok())
-        .map(|name| InputDevice { id: name.clone(), name })
+        .map(|name| InputDevice {
+            id: name.clone(),
+            name,
+        })
 }
 
 /// Działające przechwytywanie. Strumień cpal żyje w osobnym wątku, bo nie
@@ -80,21 +85,27 @@ impl Capture {
         let (ready_tx, ready_rx) = mpsc::channel::<anyhow::Result<()>>();
 
         let thread = std::thread::spawn(move || {
-            let stream = match build_stream(source, &device_id, session_start_ms, on_chunk, on_error) {
-                Ok(stream) => stream,
-                Err(err) => {
-                    let _ = ready_tx.send(Err(err));
-                    return;
-                }
-            };
+            let stream =
+                match build_stream(source, &device_id, session_start_ms, on_chunk, on_error) {
+                    Ok(stream) => stream,
+                    Err(err) => {
+                        let _ = ready_tx.send(Err(err));
+                        return;
+                    }
+                };
             let _ = ready_tx.send(Ok(()));
             // Czekamy na sygnał stopu albo zamknięcie kanału.
             let _ = stop_rx.recv();
             drop(stream);
         });
 
-        ready_rx.recv().map_err(|_| anyhow::anyhow!("wątek audio padł przy starcie"))??;
-        Ok(Self { stop: Some(stop_tx), thread: Some(thread) })
+        ready_rx
+            .recv()
+            .map_err(|_| anyhow::anyhow!("wątek audio padł przy starcie"))??;
+        Ok(Self {
+            stop: Some(stop_tx),
+            thread: Some(thread),
+        })
     }
 
     pub fn stop(&mut self) {
@@ -165,7 +176,7 @@ fn build_stream(
         let base = *base_ms.get_or_insert_with(|| (cw_now_ms() - session_start_ms).max(0.0));
         let start_ms = base + emitted as f64 / ASR_SAMPLE_RATE * 1000.0;
         emitted += samples.len() as u64;
-        on_chunk(PcmChunk { source, samples, start_ms });
+        on_chunk(PcmChunk { samples, start_ms });
     };
 
     let err_fn = move |err: cpal::StreamError| on_error(err.to_string());
@@ -207,9 +218,10 @@ fn build_stream(
 fn downmix<T: Copy>(data: &[T], channels: usize, out: &mut Vec<f32>, to_f32: impl Fn(T) -> f32) {
     out.clear();
     let channels = channels.max(1);
-    out.extend(data.chunks(channels).map(|frame| {
-        frame.iter().map(|&s| to_f32(s)).sum::<f32>() / frame.len() as f32
-    }));
+    out.extend(
+        data.chunks(channels)
+            .map(|frame| frame.iter().map(|&s| to_f32(s)).sum::<f32>() / frame.len() as f32),
+    );
 }
 
 fn cw_now_ms() -> f64 {
@@ -231,7 +243,12 @@ pub struct Resampler {
 
 impl Resampler {
     pub fn new(from: f64, to: f64) -> Self {
-        Self { step: from / to, pos: 0.0, acc: 0.0, count: 0 }
+        Self {
+            step: from / to,
+            pos: 0.0,
+            acc: 0.0,
+            count: 0,
+        }
     }
 
     pub fn process(&mut self, input: &[f32]) -> Vec<f32> {

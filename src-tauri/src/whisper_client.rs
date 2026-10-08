@@ -19,9 +19,15 @@ pub struct Quality {
 
 impl Quality {
     /// Rundy przyrostowe: tekst ma się pojawić szybko, i tak go podmienimy.
-    pub const FAST: Quality = Quality { beam_size: None, suppress_non_speech: true };
+    pub const FAST: Quality = Quality {
+        beam_size: None,
+        suppress_non_speech: true,
+    };
     /// Wersja ostateczna: ta zostaje w notatce.
-    pub const ACCURATE: Quality = Quality { beam_size: Some(5), suppress_non_speech: true };
+    pub const ACCURATE: Quality = Quality {
+        beam_size: Some(5),
+        suppress_non_speech: true,
+    };
 }
 
 #[derive(Debug)]
@@ -33,7 +39,9 @@ pub enum WhisperError {
 impl std::fmt::Display for WhisperError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            WhisperError::Offline(url) => write!(f, "Nie mogę połączyć się z whisper-server ({url})."),
+            WhisperError::Offline(url) => {
+                write!(f, "Nie mogę połączyć się z whisper-server ({url}).")
+            }
             WhisperError::Http(status) => write!(f, "whisper-server zwrócił {status}."),
         }
     }
@@ -71,18 +79,33 @@ impl WhisperClient {
     }
 
     /// `pcm`: 16 kHz mono. `context` trafia do `prompt` whispera.
-    pub async fn transcribe(&self, pcm: &[f32], context: &str, quality: Quality) -> Result<String, WhisperError> {
+    pub async fn transcribe(
+        &self,
+        pcm: &[f32],
+        context: &str,
+        quality: Quality,
+    ) -> Result<String, WhisperError> {
         let json = self.inference(pcm, context, quality, "json").await?;
         Ok(Text::clean_whisper(json["text"].as_str().unwrap_or("")))
     }
 
     /// Segmenty z czasami (`verbose_json`) — do importu nagrań.
-    pub async fn transcribe_segments(&self, pcm: &[f32], context: &str, quality: Quality) -> Result<Vec<TimedText>, WhisperError> {
-        let json = self.inference(pcm, context, quality, "verbose_json").await?;
+    pub async fn transcribe_segments(
+        &self,
+        pcm: &[f32],
+        context: &str,
+        quality: Quality,
+    ) -> Result<Vec<TimedText>, WhisperError> {
+        let json = self
+            .inference(pcm, context, quality, "verbose_json")
+            .await?;
         let mut out: Vec<TimedText> = Vec::new();
         let mut raw: Vec<String> = Vec::new();
         for segment in json["segments"].as_array().into_iter().flatten() {
-            let (Some(start), Some(end)) = (segment["start"].as_f64(), segment["end"].as_f64()) else { continue };
+            let (Some(start), Some(end)) = (segment["start"].as_f64(), segment["end"].as_f64())
+            else {
+                continue;
+            };
             let text = segment["text"].as_str().unwrap_or("");
             // Segment bez spacji na początku to ciąg dalszy słowa rozciętego
             // na granicy poprzedniego — doklejamy bez przerwy.
@@ -92,7 +115,11 @@ impl WhisperClient {
                     last.end = end;
                 }
                 _ => {
-                    out.push(TimedText { start, end, text: String::new() });
+                    out.push(TimedText {
+                        start,
+                        end,
+                        text: String::new(),
+                    });
                     raw.push(text.to_string());
                 }
             }
@@ -103,7 +130,13 @@ impl WhisperClient {
         Ok(out.into_iter().filter(|s| !s.text.is_empty()).collect())
     }
 
-    async fn inference(&self, pcm: &[f32], context: &str, quality: Quality, format: &str) -> Result<serde_json::Value, WhisperError> {
+    async fn inference(
+        &self,
+        pcm: &[f32],
+        context: &str,
+        quality: Quality,
+        format: &str,
+    ) -> Result<serde_json::Value, WhisperError> {
         let wav = Wav::encode(pcm, 16_000, 1);
         let file = reqwest::multipart::Part::bytes(wav)
             .file_name("chunk.wav")
@@ -138,6 +171,9 @@ impl WhisperClient {
         if response.status() != 200 {
             return Err(WhisperError::Http(response.status().as_u16()));
         }
-        response.json().await.map_err(|_| WhisperError::Offline(self.endpoint.clone()))
+        response
+            .json()
+            .await
+            .map_err(|_| WhisperError::Offline(self.endpoint.clone()))
     }
 }

@@ -2,13 +2,18 @@
 //! interfejs. Port `Recorder.swift`. Interfejs dostaje pełny stan zdarzeniem
 //! `state` przy każdej zmianie.
 
+use crate::assistant::{self, ClaudeBridge, Image};
 use crate::audio::{AudioSource, Capture};
+use crate::media_import;
 use crate::model_downloader;
+use crate::obs::{self, ObsLink};
 use crate::pipeline::{self, Event, Pipeline};
 use crate::settings::{AssistantBackend, Settings};
 use crate::whisper_client::WhisperClient;
 use crate::whisper_server::{self, WhisperServer};
-use cw_core::assistant::{AssistantItem, AssistantSession};
+use cw_core::assistant::{
+    build_prompt, AssistantItem, AssistantSession, Found, QuestionWatcher, DEFAULT_CONTEXT_SEGMENTS,
+};
 use cw_core::markdown::{Markdown, MarkdownOptions, Session, SessionMeta};
 use cw_core::time::{now_ms, TimeFormat};
 use cw_core::transcript_store::{Segment, TranscriptStore};
@@ -56,6 +61,15 @@ pub struct Check {
 struct Inner {
     store: TranscriptStore,
     session: AssistantSession,
+    watcher: Option<QuestionWatcher>,
+    /// Jedno pytanie automatyczne na raz: przy monologu wykrywacz trafia co
+    /// kilka sekund, a odpowiedź trwa 1,5-5 s — bez tego kolejka rosła.
+    asking: Option<JoinHandle<()>>,
+    /// Najświeższe pytanie czekające, aż zwolni się miejsce.
+    pending_auto: Option<Found>,
+    bridge_started: bool,
+    /// Sesja związana z nagraniem w OBS — przy stopie kończymy i jego.
+    obs_session: bool,
     /// Metadane sesji z importu; `None` = rozmowa nagrana na żywo.
     imported_meta: Option<SessionMeta>,
     is_running: bool,
@@ -75,24 +89,39 @@ struct Inner {
 
 pub struct Recorder {
     app: AppHandle,
+    bridge: Arc<ClaudeBridge>,
+    pub obs: Arc<ObsLink>,
     pub vendor: PathBuf,
     inner: Mutex<Inner>,
     pub settings: Mutex<Settings>,
     server: tokio::sync::Mutex<WhisperServer>,
 }
 
-pub const MEDIA_EXTENSIONS: &[&str] = &["mp4", "mov", "m4a", "mp3", "wav", "aac", "flac", "ogg", "webm", "mkv", "m4v"];
+pub const MEDIA_EXTENSIONS: &[&str] = &[
+    "mp4", "mov", "m4a", "mp3", "wav", "aac", "flac", "ogg", "webm", "mkv", "m4v",
+];
 
 impl Recorder {
-    pub fn new(app: AppHandle, vendor: PathBuf) -> Arc<Self> {
+    pub fn new(
+        app: AppHandle,
+        vendor: PathBuf,
+        obs_events: mpsc::UnboundedSender<obs::Event>,
+    ) -> Arc<Self> {
         Arc::new(Self {
             app,
+            bridge: ClaudeBridge::new(),
+            obs: ObsLink::new(obs_events),
             server: tokio::sync::Mutex::new(WhisperServer::new(vendor.clone())),
             vendor,
             settings: Mutex::new(Settings::load()),
             inner: Mutex::new(Inner {
                 store: TranscriptStore::new(now_ms()),
-                session: AssistantSession::new(20),
+                session: AssistantSession::new(30),
+                watcher: None,
+                asking: None,
+                pending_auto: None,
+                bridge_started: false,
+                obs_session: false,
                 imported_meta: None,
                 is_running: false,
                 is_processing: false,
@@ -130,7 +159,12 @@ impl Recorder {
             .as_ref()
             .map(|m| m.title.clone())
             .filter(|t| !t.is_empty())
-            .unwrap_or_else(|| format!("rozmowa-{}", TimeFormat::filename_stamp(inner.started_at.unwrap_or_else(now_ms))));
+            .unwrap_or_else(|| {
+                format!(
+                    "rozmowa-{}",
+                    TimeFormat::filename_stamp(inner.started_at.unwrap_or_else(now_ms))
+                )
+            });
         AppState {
             segments: inner.store.segments(),
             answers: inner.session.all(),
@@ -188,23 +222,39 @@ impl Recorder {
     pub fn readiness(&self) -> Vec<Check> {
         let settings = self.settings();
         let mut checks = Vec::new();
-        let has_engine = self.server.try_lock().map(|s| s.binary_available()).unwrap_or(true);
+        let has_engine = self
+            .server
+            .try_lock()
+            .map(|s| s.binary_available())
+            .unwrap_or(true);
         checks.push(Check {
             id: "whisper",
             title: "Silnik mowy (whisper.cpp)".into(),
             ok: has_engine,
-            detail: if has_engine { "Wbudowany (GPU przez Vulkan, zapasowo CPU).".into() } else { "Brak w instalacji — zainstaluj aplikację ponownie.".into() },
+            detail: if has_engine {
+                "Wbudowany (GPU przez Vulkan, zapasowo CPU).".into()
+            } else {
+                "Brak w instalacji — zainstaluj aplikację ponownie.".into()
+            },
             action: None,
             action_label: None,
         });
         let model = settings.whisper_model.clone();
         let has_model = model_downloader::is_installed(&model);
-        let size = model_downloader::KNOWN.iter().find(|m| m.id == model).map(|m| m.bytes / 1_000_000).unwrap_or(0);
+        let size = model_downloader::KNOWN
+            .iter()
+            .find(|m| m.id == model)
+            .map(|m| m.bytes / 1_000_000)
+            .unwrap_or(0);
         checks.push(Check {
             id: "model",
             title: format!("Model mowy ({model})"),
             ok: has_model,
-            detail: if has_model { "Pobrany.".into() } else { format!("Pobierze się sam przy pierwszym nasłuchu ({size} MB) albo teraz.") },
+            detail: if has_model {
+                "Pobrany.".into()
+            } else {
+                format!("Pobierze się sam przy pierwszym nasłuchu ({size} MB) albo teraz.")
+            },
             action: (!has_model).then(|| "downloadModel".into()),
             action_label: (!has_model).then(|| "Pobierz".into()),
         });
@@ -213,7 +263,11 @@ impl Recorder {
             id: "mic",
             title: "Mikrofon".into(),
             ok: !settings.use_microphone || !mics.is_empty(),
-            detail: if mics.is_empty() { "Nie wykryto żadnego mikrofonu.".into() } else { format!("Dostępne: {}", mics.len()) },
+            detail: if mics.is_empty() {
+                "Nie wykryto żadnego mikrofonu.".into()
+            } else {
+                format!("Dostępne: {}", mics.len())
+            },
             action: None,
             action_label: None,
         });
@@ -268,7 +322,9 @@ impl Recorder {
     /// Podnosi `whisper-server`, jeśli trzeba. `false`, gdy się nie da.
     async fn prepare_whisper(self: &Arc<Self>) -> bool {
         let settings = self.settings();
-        if !model_downloader::is_installed(&settings.whisper_model) && !self.download_model(&settings.whisper_model).await {
+        if !model_downloader::is_installed(&settings.whisper_model)
+            && !self.download_model(&settings.whisper_model).await
+        {
             return false;
         }
         let client = WhisperClient::new(settings.whisper_port, &settings.language_code(), 15);
@@ -277,15 +333,22 @@ impl Recorder {
             return true;
         }
         if !settings.auto_start_whisper {
-            self.set_error("whisper-server nie działa. Włącz automatyczne uruchamianie w Ustawieniach.");
+            self.set_error(
+                "whisper-server nie działa. Włącz automatyczne uruchamianie w Ustawieniach.",
+            );
             return false;
         }
-        self.set_status(format!("Uruchamiam whisper-server ({})…", settings.whisper_model));
+        self.set_status(format!(
+            "Uruchamiam whisper-server ({})…",
+            settings.whisper_model
+        ));
         let config = whisper_server::Config {
             model: settings.whisper_model.clone(),
             port: settings.whisper_port,
             language: settings.language_code(),
-            threads: std::thread::available_parallelism().map(|n| n.get().min(8)).unwrap_or(4),
+            threads: std::thread::available_parallelism()
+                .map(|n| n.get().min(8))
+                .unwrap_or(4),
         };
         match self.server.lock().await.ensure_running(&config).await {
             Ok(_) => true,
@@ -297,7 +360,10 @@ impl Recorder {
         }
     }
 
-    pub async fn start(self: &Arc<Self>) {
+    /// `origin` (ms epoki) to chwila, od której liczą się znaczniki czasu —
+    /// start nagrania w OBS, żeby 00:01:05 w transkrypcie znaczyło 00:01:05
+    /// w filmie. `Some` = OBS już nagrywa (włączony ręcznie).
+    pub async fn start(self: &Arc<Self>, origin: Option<f64>) {
         let settings = self.settings();
         {
             let mut inner = self.inner.lock().unwrap();
@@ -323,7 +389,23 @@ impl Recorder {
             return;
         }
 
-        let now = now_ms();
+        // Nagranie w OBS dopiero po przygotowaniu silnika, żeby film
+        // i transkrypt zaczynały się możliwie razem.
+        let mut obs_session = origin.is_some();
+        let mut origin = origin;
+        let mut obs_note = None;
+        if origin.is_none() && settings.follow_obs {
+            self.set_status("Włączam nagrywanie w OBS…");
+            match self.obs.start_recording().await {
+                Ok(at) => {
+                    origin = Some(at);
+                    obs_session = true;
+                }
+                Err(err) => obs_note = Some(err),
+            }
+        }
+
+        let now = origin.unwrap_or_else(now_ms);
         let (events_tx, events_rx) = mpsc::unbounded_channel();
         let mut sources = Vec::new();
         if settings.use_system_audio {
@@ -332,8 +414,12 @@ impl Recorder {
         if settings.use_microphone {
             sources.push(AudioSource::Microphone);
         }
-        let project_context = std::fs::read_to_string(&settings.project_context_path).unwrap_or_default();
-        let vocabulary = Vocabulary::merge(&settings.whisper_vocabulary, &project_context, Vocabulary::MAX_CHARS);
+        let project_context = settings.project_context();
+        let vocabulary = Vocabulary::merge(
+            &settings.whisper_vocabulary,
+            &project_context,
+            Vocabulary::MAX_CHARS,
+        );
 
         let mut pipelines = Vec::new();
         let mut captures = Vec::new();
@@ -350,7 +436,11 @@ impl Recorder {
                 events_tx.clone(),
             );
             let errors = events_tx.clone();
-            let device = if source == AudioSource::Microphone { settings.mic_device_id.as_str() } else { "" };
+            let device = if source == AudioSource::Microphone {
+                settings.mic_device_id.as_str()
+            } else {
+                ""
+            };
             match Capture::start(source, device, now, pipeline.sender(), move |err| {
                 let _ = errors.send(Event::Error(format!("Przechwytywanie przerwane: {err}")));
             }) {
@@ -379,24 +469,64 @@ impl Recorder {
 
         let heard = sources
             .iter()
-            .map(|s| if *s == AudioSource::System { "system" } else { "mikrofon" })
+            .map(|s| {
+                if *s == AudioSource::System {
+                    "system"
+                } else {
+                    "mikrofon"
+                }
+            })
             .collect::<Vec<_>>()
             .join(" + ");
         {
             let mut inner = self.inner.lock().unwrap();
             inner.store = TranscriptStore::new(now);
-            inner.session = AssistantSession::new(20);
+            inner.session = AssistantSession::new(30);
+            inner.watcher = Some(QuestionWatcher::new(
+                settings.min_confidence,
+                500,
+                Box::new(|_| {}),
+            ));
+            inner.pending_auto = None;
             inner.started_at = Some(now);
             inner.pipelines = pipelines;
             inner.captures = captures;
             inner.sources = sources;
             inner.is_running = true;
             inner.is_processing = false;
-            inner.status = format!("Słucham: {heard} · whisper {} · {}", settings.whisper_model, settings.language_code());
+            inner.status = format!(
+                "Słucham: {heard} · whisper {} · {}",
+                settings.whisper_model,
+                settings.language_code()
+            );
+            if obs_session {
+                inner.status.push_str(" · OBS nagrywa");
+            }
+            inner.obs_session = obs_session;
+            inner.last_error = obs_note;
             inner.tasks.push(self.spawn_events(events_rx));
             inner.tasks.push(self.spawn_ticker());
         }
         self.publish();
+        crate::windows::sync_topbar(&self.app, settings.top_bar);
+        self.prepare_assistant().await;
+    }
+
+    /// Podnosi most i rozgrzewa go w tle przy starcie nasłuchu: zimny start
+    /// CLI to ~3,9 s do pierwszego tokenu, ciepły ~1,8 s.
+    async fn prepare_assistant(self: &Arc<Self>) {
+        let settings = self.settings();
+        if !settings.assistant_enabled || settings.assistant_backend != AssistantBackend::ClaudeCode
+        {
+            return;
+        }
+        match self.bridge.start(&settings.claude_model).await {
+            Ok(()) => {
+                self.inner.lock().unwrap().bridge_started = true;
+                self.bridge.warmup();
+            }
+            Err(err) => self.set_error(err),
+        }
     }
 
     /// Aktualizacje z łańcuchów trafiają do `TranscriptStore`.
@@ -426,6 +556,21 @@ impl Recorder {
             let mut interval = tokio::time::interval(Duration::from_millis(250));
             loop {
                 interval.tick().await;
+                let settings = this.settings();
+                let found = if settings.assistant_enabled && settings.auto_ask {
+                    let mut inner = this.inner.lock().unwrap();
+                    let segments = inner.store.segments();
+                    inner
+                        .watcher
+                        .as_mut()
+                        .map(|w| w.scan(&segments))
+                        .unwrap_or_default()
+                } else {
+                    Vec::new()
+                };
+                for question in found {
+                    this.handle_detected(question);
+                }
                 this.publish();
             }
         })
@@ -444,7 +589,9 @@ impl Recorder {
         inner.last_error = None;
         let at = inner.started_at.unwrap_or(now) + update.start_ms;
         // `replace: true`: whisper podaje pełną treść przy każdej rundzie.
-        inner.store.upsert(&update.key, Some(&update.speaker), &update.text, at, true);
+        inner
+            .store
+            .upsert(&update.key, Some(&update.speaker), &update.text, at, true);
         if update.is_final {
             // Pieczętujemy klucz: ten sam wynik potrafi przyjść ponownie.
             inner.store.seal(&update.key, now);
@@ -452,7 +599,9 @@ impl Recorder {
     }
 
     /// Najpierw gasimy stan widoczny w interfejsie, potem sprzątamy.
-    pub async fn stop(self: &Arc<Self>) {
+    /// `recording_path` podaje OBS, gdy to on zakończył nagranie — wtedy
+    /// nie prosimy go o stop drugi raz.
+    pub async fn stop(self: &Arc<Self>, recording_path: Option<String>) {
         let (pipelines, captures, tasks) = {
             let mut inner = self.inner.lock().unwrap();
             if !inner.is_running && inner.pipelines.is_empty() {
@@ -474,14 +623,165 @@ impl Recorder {
         for t in tasks {
             t.abort();
         }
+        // Odpowiedź na rozmowę, która się skończyła, nie jest nikomu potrzebna.
+        let bridge_started = {
+            let mut inner = self.inner.lock().unwrap();
+            if let Some(task) = inner.asking.take() {
+                task.abort();
+            }
+            inner.pending_auto = None;
+            std::mem::take(&mut inner.bridge_started)
+        };
+        if bridge_started {
+            self.bridge.stop().await;
+        }
         // Zatrzymujemy tylko serwer, który sami podnieśliśmy.
         self.server.lock().await.stop();
         {
             let mut inner = self.inner.lock().unwrap();
             inner.store.finalize_all(now_ms());
-            inner.status = if inner.store.is_empty() { "Gotowy".into() } else { "Zatrzymane".into() };
+            inner.status = if inner.store.is_empty() {
+                "Gotowy".into()
+            } else {
+                "Zatrzymane".into()
+            };
         }
         self.publish();
+        crate::windows::sync_topbar(&self.app, false);
+
+        let obs_session = std::mem::take(&mut self.inner.lock().unwrap().obs_session);
+        let mut video = recording_path;
+        if obs_session && video.is_none() {
+            self.set_status("Kończę nagranie w OBS…");
+            video = self.obs.stop_recording().await;
+            self.set_status(if self.segments().is_empty() {
+                "Gotowy"
+            } else {
+                "Zatrzymane"
+            });
+        }
+        if let Some(video) = video.filter(|_| !self.segments().is_empty()) {
+            self.save_next_to(&video);
+        }
+    }
+
+    /// Transkrypt obok pliku wideo z OBS, z tą samą nazwą i czasami
+    /// względnymi — tylko te pokrywają się z osią filmu.
+    fn save_next_to(&self, video: &str) {
+        let path = cw_core::obs::Obs::transcript_path(video);
+        match std::fs::write(&path, self.markdown(Some(false))) {
+            Ok(()) => self.set_status(format!(
+                "Zapisano obok nagrania: {}",
+                path.file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            )),
+            Err(err) => self.set_error(format!(
+                "Nie udało się zapisać transkryptu obok nagrania: {err}"
+            )),
+        }
+    }
+
+    /// OBS włączany i wyłączany z ustawień bez restartu.
+    pub fn sync_obs(&self) {
+        if self.settings().follow_obs {
+            self.obs.start();
+        } else {
+            self.obs.stop();
+        }
+    }
+
+    pub fn is_obs_session(&self) -> bool {
+        self.inner.lock().unwrap().obs_session
+    }
+
+    /// Import nagrania albo wideo. Wynik ląduje w tym samym transkrypcie co
+    /// rozmowa na żywo, więc eksport, kopiowanie i pytania działają bez zmian.
+    pub fn import_file(self: &Arc<Self>, path: PathBuf) {
+        {
+            let mut inner = self.inner.lock().unwrap();
+            if inner.is_running || inner.is_processing {
+                return;
+            }
+            inner.is_processing = true;
+            inner.last_error = None;
+        }
+        self.publish();
+        let this = self.clone();
+        let task = tokio::spawn(async move {
+            let name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            if this.prepare_whisper().await {
+                let settings = this.settings();
+                let ffmpeg = this.ffmpeg();
+                let progress = this.clone();
+                let result = media_import::run(
+                    &ffmpeg,
+                    &path,
+                    settings.whisper_port,
+                    &settings.language_code(),
+                    move |m| progress.set_status(m),
+                )
+                .await;
+                {
+                    let mut inner = this.inner.lock().unwrap();
+                    match result {
+                        Ok(result) => {
+                            let count = result.segments.len();
+                            let started = result.meta.started_at.unwrap_or_else(now_ms);
+                            inner.store = TranscriptStore::new(started);
+                            // Segmenty z importu są gotowe — wkładamy je jako zamknięte.
+                            for segment in &result.segments {
+                                inner.store.upsert(
+                                    &segment.id,
+                                    Some(&segment.speaker),
+                                    &segment.text,
+                                    segment.started_at,
+                                    true,
+                                );
+                                inner.store.seal(&segment.id, segment.ended_at);
+                            }
+                            inner.store.finalize_all(now_ms());
+                            inner.session = AssistantSession::new(30);
+                            inner.started_at = Some(started);
+                            inner.imported_meta = Some(result.meta);
+                            inner.status = if count == 0 {
+                                format!("W {name} nie rozpoznano mowy")
+                            } else {
+                                format!("Zaimportowano {name} · {count} wypowiedzi")
+                            };
+                            if settings.diarize_after {
+                                inner.last_error = Some("Bez podziału na głosy: rozpoznawanie głosów dojdzie w kolejnej wersji na Windows.".into());
+                            }
+                        }
+                        Err(err) => {
+                            inner.last_error = Some(err.to_string());
+                            inner.status = "Gotowy".into();
+                        }
+                    }
+                }
+                this.server.lock().await.stop();
+            }
+            this.inner.lock().unwrap().is_processing = false;
+            this.publish();
+        });
+        self.inner.lock().unwrap().processing = Some(task);
+    }
+
+    /// ffmpeg z instalatora; zapasowo z PATH (budowanie lokalne).
+    fn ffmpeg(&self) -> PathBuf {
+        let bundled = self.vendor.join("ffmpeg").join(if cfg!(windows) {
+            "ffmpeg.exe"
+        } else {
+            "ffmpeg"
+        });
+        if bundled.is_file() {
+            bundled
+        } else {
+            PathBuf::from("ffmpeg")
+        }
     }
 
     pub fn cancel_processing(&self) {
@@ -495,6 +795,220 @@ impl Recorder {
         self.publish();
     }
 
+    // --- asystent ---
+
+    /// Pytanie wykryte w transkrypcji.
+    fn handle_detected(self: &Arc<Self>, found: Found) {
+        // Własne pytania nie są do podpowiadania: sufler odpowiadałby sam sobie.
+        if found.speaker == "Ty" {
+            return;
+        }
+        {
+            let mut inner = self.inner.lock().unwrap();
+            if inner.asking.as_ref().is_some_and(|t| !t.is_finished()) {
+                // Nowsze wygrywa: odpowiedź na to, co padło przed chwilą, jest
+                // warta więcej niż na to sprzed kilkunastu sekund.
+                inner.pending_auto = Some(found);
+                return;
+            }
+        }
+        self.ask(&found.question, Some(found.speaker.clone()), true, None);
+    }
+
+    /// Po tylu ms pytanie przestaje być warte odpowiedzi.
+    const AUTO_QUESTION_TTL: f64 = 20_000.0;
+
+    fn start_pending(self: &Arc<Self>) {
+        let pending = {
+            let mut inner = self.inner.lock().unwrap();
+            if inner.asking.as_ref().is_some_and(|t| !t.is_finished()) {
+                return;
+            }
+            inner.pending_auto.take()
+        };
+        if let Some(found) = pending.filter(|f| now_ms() - f.at < Self::AUTO_QUESTION_TTL) {
+            self.ask(&found.question, Some(found.speaker.clone()), true, None);
+        }
+    }
+
+    /// Pytanie: wykryte albo zadane ręcznie (z obrazkiem lub bez). Ręczne
+    /// omija wykrywanie, ale dostaje ten sam kontekst z transkryptu.
+    pub fn ask(
+        self: &Arc<Self>,
+        question: &str,
+        speaker: Option<String>,
+        auto: bool,
+        image: Option<Image>,
+    ) {
+        let settings = self.settings();
+        if !settings.assistant_enabled {
+            return;
+        }
+        // Z obrazkiem samo pytanie może być puste — reszta jest na zrzucie.
+        let asked = if question.is_empty() && image.is_some() {
+            "Co widzisz na tym obrazku?"
+        } else {
+            question
+        };
+        let segments = self.segments();
+        let Some(prompt) = build_prompt(
+            asked,
+            &segments,
+            &settings.title,
+            &settings.project_context(),
+            DEFAULT_CONTEXT_SEGMENTS,
+        ) else {
+            return;
+        };
+        let backend = settings.assistant_backend;
+        if backend == AssistantBackend::Api && settings.api_key.is_empty() {
+            self.set_error("Brak klucza API. Ustawienia → Podpowiedzi → Klucz API.");
+            return;
+        }
+        let item = {
+            let mut inner = self.inner.lock().unwrap();
+            inner
+                .session
+                .add(asked, speaker.as_deref(), now_ms(), auto, image.is_some())
+        };
+        self.publish();
+
+        let this = self.clone();
+        let id = item.id.clone();
+        let task = tokio::spawn(async move {
+            let started = std::time::Instant::now();
+            let result = match backend {
+                AssistantBackend::ClaudeCode => {
+                    if !this.inner.lock().unwrap().bridge_started {
+                        if let Err(err) = this.bridge.start(&settings.claude_model).await {
+                            this.fail_answer(&id, err);
+                            this.start_pending();
+                            return;
+                        }
+                        this.inner.lock().unwrap().bridge_started = true;
+                    }
+                    // Ze zrzutem ekranu model potrzebuje więcej czasu.
+                    let timeout = Duration::from_secs(if image.is_some() { 120 } else { 60 });
+                    let sink = this.clone();
+                    let sink_id = id.clone();
+                    this.bridge
+                        .ask(&prompt, image.as_ref(), timeout, move |delta| {
+                            let ttft = started.elapsed().as_secs_f64() * 1000.0;
+                            sink.inner
+                                .lock()
+                                .unwrap()
+                                .session
+                                .append(&sink_id, delta, Some(ttft));
+                            sink.publish();
+                        })
+                        .await
+                        .map(|_| ())
+                }
+                AssistantBackend::Api => {
+                    let sink = this.clone();
+                    let sink_id = id.clone();
+                    assistant::ask_api(
+                        &prompt,
+                        &settings.api_key,
+                        &settings.model_id,
+                        image.as_ref(),
+                        move |delta, ttft| {
+                            sink.inner
+                                .lock()
+                                .unwrap()
+                                .session
+                                .append(&sink_id, delta, ttft);
+                            sink.publish();
+                        },
+                    )
+                    .await
+                }
+            };
+            match result {
+                Ok(()) => {
+                    let ms = started.elapsed().as_secs_f64() * 1000.0;
+                    this.inner
+                        .lock()
+                        .unwrap()
+                        .session
+                        .complete(&id, None, Some(ms));
+                    this.publish();
+                }
+                Err(err) => this.fail_answer(&id, err),
+            }
+            this.start_pending();
+        });
+        if auto {
+            self.inner.lock().unwrap().asking = Some(task);
+        }
+    }
+
+    fn fail_answer(&self, id: &str, error: String) {
+        self.inner.lock().unwrap().session.fail(id, &error);
+        self.publish();
+    }
+
+    /// Notatka z podsumowaniem do wklejenia w Claude. Trwa kilka sekund,
+    /// bo model pisze podsumowanie.
+    pub async fn claude_note(self: &Arc<Self>) -> Result<String, String> {
+        let settings = self.settings();
+        let transcript = self.markdown(None);
+        let segments = self.segments();
+        let options = MarkdownOptions {
+            frontmatter: false,
+            stats: false,
+            ..MarkdownOptions::default()
+        };
+        let body = Markdown::render(
+            &Session {
+                meta: SessionMeta::default(),
+                segments,
+            },
+            &options,
+        );
+        let prompt = format!(
+            "Poniżej jest transkrypt rozmowy z oznaczeniem osób i znacznikami czasu [HH:MM:SS].\n\
+             Napisz zwięzłe podsumowanie w Markdownie: 2-4 zdania ogólnie, potem krótka lista\n\
+             najważniejszych punktów, decyzji i zadań, każdy ze znacznikiem [HH:MM:SS].\n\
+             Odpowiedz w języku transkryptu. Wypisz tylko podsumowanie, bez wstępu.\n\n{}",
+            body.chars().take(12_000).collect::<String>()
+        );
+        let summary = match settings.assistant_backend {
+            AssistantBackend::ClaudeCode => {
+                if !self.inner.lock().unwrap().bridge_started {
+                    self.bridge.start(&settings.claude_model).await?;
+                    self.inner.lock().unwrap().bridge_started = true;
+                }
+                self.bridge
+                    .ask(&prompt, None, Duration::from_secs(180), |_| {})
+                    .await?
+            }
+            AssistantBackend::Api => {
+                let mut text = String::new();
+                assistant::ask_api(
+                    &prompt,
+                    &settings.api_key,
+                    &settings.model_id,
+                    None,
+                    |d, _| text.push_str(d),
+                )
+                .await?;
+                text
+            }
+        };
+        // Podsumowanie pod nagłówkiem dokumentu, przed tabelą osób.
+        let heading = format!("## Podsumowanie\n\n{}\n\n", summary.trim());
+        Ok(match transcript.find("\n## ") {
+            Some(at) => format!(
+                "{}\n{}{}",
+                &transcript[..at],
+                &heading[..heading.len() - 1],
+                &transcript[at..]
+            ),
+            None => heading + &transcript,
+        })
+    }
+
     // --- eksport ---
 
     pub fn segments(&self) -> Vec<Segment> {
@@ -504,7 +1018,10 @@ impl Recorder {
     pub fn chat_text(&self, ids: Option<Vec<String>>) -> String {
         let segments = self.segments();
         let chosen: Vec<Segment> = match ids {
-            Some(ids) => segments.into_iter().filter(|s| ids.contains(&s.id)).collect(),
+            Some(ids) => segments
+                .into_iter()
+                .filter(|s| ids.contains(&s.id))
+                .collect(),
             None => segments,
         };
         Markdown::chat_text(&chosen)
@@ -551,11 +1068,19 @@ pub fn assistant_label(settings: &Settings) -> String {
     }
     match settings.assistant_backend {
         AssistantBackend::ClaudeCode => {
-            let model = if settings.claude_model.is_empty() { "domyślny" } else { &settings.claude_model };
+            let model = if settings.claude_model.is_empty() {
+                "domyślny"
+            } else {
+                &settings.claude_model
+            };
             format!("Claude Code · {model}")
         }
         AssistantBackend::Api => {
-            if settings.model_id.is_empty() { "API".into() } else { settings.model_id.clone() }
+            if settings.model_id.is_empty() {
+                "API".into()
+            } else {
+                settings.model_id.clone()
+            }
         }
     }
 }

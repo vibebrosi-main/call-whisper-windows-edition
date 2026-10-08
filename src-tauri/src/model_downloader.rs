@@ -22,9 +22,21 @@ pub struct KnownModel {
 
 /// Rozmiary z repozytorium — do pokazania, na co się użytkownik pisze.
 pub const KNOWN: &[KnownModel] = &[
-    KnownModel { id: "small", bytes: 487_601_967, note: "domyślny, 13,3 % błędnych słów po polsku, ~930 ms" },
-    KnownModel { id: "large-v3-turbo", bytes: 1_624_555_275, note: "dokładniejszy: 10,0 %, ale ~1,6 s i 1,6 GB pamięci" },
-    KnownModel { id: "base", bytes: 147_951_465, note: "najmniejszy, wyraźnie gorszy po polsku" },
+    KnownModel {
+        id: "small",
+        bytes: 487_601_967,
+        note: "domyślny, 13,3 % błędnych słów po polsku, ~930 ms",
+    },
+    KnownModel {
+        id: "large-v3-turbo",
+        bytes: 1_624_555_275,
+        note: "dokładniejszy: 10,0 %, ale ~1,6 s i 1,6 GB pamięci",
+    },
+    KnownModel {
+        id: "base",
+        bytes: 147_951_465,
+        note: "najmniejszy, wyraźnie gorszy po polsku",
+    },
 ];
 
 #[derive(Clone, Copy, Serialize)]
@@ -72,7 +84,11 @@ pub async fn download(model: &str, on_progress: impl Fn(Progress)) -> anyhow::Re
         // Co 200 ms wystarczy — pasek postępu nie potrzebuje więcej.
         if last_report.elapsed() >= Duration::from_millis(200) {
             last_report = Instant::now();
-            on_progress(Progress { fraction: received as f64 / total as f64, received_bytes: received, total_bytes: total });
+            on_progress(Progress {
+                fraction: received as f64 / total as f64,
+                received_bytes: received,
+                total_bytes: total,
+            });
         }
     }
     file.flush()?;
@@ -82,6 +98,10 @@ pub async fn download(model: &str, on_progress: impl Fn(Progress)) -> anyhow::Re
         anyhow::bail!("Pobieranie przerwane — plik jest niekompletny.");
     }
     std::fs::rename(&partial, &target)?;
-    on_progress(Progress { fraction: 1.0, received_bytes: received, total_bytes: total });
+    on_progress(Progress {
+        fraction: 1.0,
+        received_bytes: received,
+        total_bytes: total,
+    });
     Ok(())
 }

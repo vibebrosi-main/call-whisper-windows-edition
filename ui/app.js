@@ -23,25 +23,6 @@ function offset(ms) {
   return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${pad(m)}:${pad(sec)}`;
 }
 
-function escapeHtml(text) {
-  return text.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-}
-
-// Odpowiedzi modelu są w Markdownie: pogrubienia, kod, listy, akapity.
-function markdown(text) {
-  const inline = (s) => escapeHtml(s)
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
-    .replace(/\*([^*]+)\*/g, "<i>$1</i>");
-  return text.split(/\n{2,}/).map((block) => {
-    const lines = block.split("\n");
-    if (lines.every((l) => /^\s*[-*•]\s+/.test(l))) {
-      return "<ul>" + lines.map((l) => `<li>${inline(l.replace(/^\s*[-*•]\s+/, ""))}</li>`).join("") + "</ul>";
-    }
-    return `<p>${lines.map(inline).join("<br>")}</p>`;
-  }).join("");
-}
-
 // Kolor awatara z nazwy: ta sama osoba ma ten sam kolor w całym transkrypcie.
 const palette = [
   ["var(--primary-container)", "var(--on-primary-container)"],
@@ -215,23 +196,7 @@ function renderAnswers() {
       : "Podpowiedzi wyłączone. Włącz je w pasku po lewej.";
     box.appendChild(p);
   }
-  for (const item of state.answers) {
-    const el = document.createElement("div");
-    el.className = "answer";
-    const icon = item.hasImage ? "#i-image" : item.auto ? "#i-sparkles" : "#i-person";
-    let body;
-    if (item.status === "pending") {
-      const secs = Math.max(0, Math.round((Date.now() - item.at) / 1000));
-      body = `<div style="display:flex;gap:8px;align-items:center"><div class="progress"></div><small>${secs} s</small></div>`;
-    } else if (item.status === "error") {
-      body = `<div class="err">${escapeHtml(item.error ?? "Błąd")}</div>`;
-    } else {
-      body = `<div class="a">${markdown(item.answer)}</div>`;
-    }
-    el.innerHTML = `<div class="q"><svg class="icon"><use href="${icon}"/></svg><span>${escapeHtml(item.question)}</span></div>${body}
-      ${item.ttftMs != null ? `<small>pierwszy token: ${Math.round(item.ttftMs)} ms</small>` : ""}`;
-    box.appendChild(el);
-  }
+  for (const item of state.answers) box.appendChild(answerCard(item));
 }
 // Licznik sekund przy oczekujących odpowiedziach.
 setInterval(() => { if (state.answers.some((a) => a.status === "pending")) renderAnswers(); }, 500);
@@ -361,14 +326,27 @@ function setAttachment(value) {
   updateSend();
 }
 
+// Zrzut z ekranu 4K to kilka MB; modele i tak nie korzystają z rozdzielczości
+// powyżej ~1500 px, a duży base64 spowalnia prompt bardziej niż odpowiedź.
+const MAX_IMAGE_SIDE = 1568;
+function attachImage(url) {
+  const img = new Image();
+  img.onload = () => {
+    const scale = Math.min(1, MAX_IMAGE_SIDE / Math.max(img.width, img.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(img.width * scale);
+    canvas.height = Math.round(img.height * scale);
+    canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+    const png = canvas.toDataURL("image/png");
+    const kb = Math.round(png.length * 3 / 4 / 1024);
+    setAttachment({ url: png, base64: png.split(",")[1], size: `${canvas.width}×${canvas.height} · ${kb} kB` });
+  };
+  img.src = url;
+}
+
 function imageFromBlob(blob) {
   const reader = new FileReader();
-  reader.onload = () => {
-    const url = reader.result;
-    const img = new Image();
-    img.onload = () => setAttachment({ url, base64: url.split(",")[1], size: `${img.width}×${img.height}` });
-    img.src = url;
-  };
+  reader.onload = () => attachImage(reader.result);
   reader.readAsDataURL(blob);
 }
 
@@ -388,7 +366,7 @@ $("ask").addEventListener("paste", (e) => {
 $("attach").onclick = async () => {
   const image = await invoke("clipboard_image");
   if (!image) { flash("W schowku nie ma obrazka"); return; }
-  setAttachment({ url: "data:image/png;base64," + image.base64, base64: image.base64, size: image.size });
+  attachImage("data:image/png;base64," + image.base64);
 };
 $("attachment-remove").onclick = () => setAttachment(null);
 $("send").onclick = send;
@@ -449,6 +427,7 @@ const fields = [
   { key: "autoAsk", label: "Pytania z rozmowy wysyłaj same", type: "bool" },
   { key: "assistantBackend", label: "Skąd biorą się podpowiedzi", type: "select", options: [["claudeCode", "Claude Code (bez klucza, w ramach subskrypcji)"], ["api", "API Experiential Labs (wymaga klucza)"]] },
   { key: "claudeModel", label: "Model Claude Code", type: "select", options: [["sonnet", "sonnet"], ["haiku", "haiku"], ["opus", "opus"]] },
+  { key: "modelId", label: "Model API", type: "select", options: "apiModels" },
   { key: "apiKey", label: "Klucz API", type: "password" },
   { key: "topBar", label: "Podpowiedzi w pasku u góry ekranu", type: "bool", hint: "Odpowiednik wyspy w notchu z macOS: podpowiedź czytasz, patrząc prawie w kamerę." },
   { section: "Wykrywanie rozmów" },
@@ -465,6 +444,7 @@ const fields = [
 
 async function showSettings() {
   const models = await invoke("models");
+  const apiModels = await invoke("api_models");
   const form = $("settings-form");
   form.innerHTML = "";
   for (const f of fields) {
@@ -480,13 +460,14 @@ async function showSettings() {
       input.checked = !!settings[f.key];
     } else if (f.type === "select") {
       input = document.createElement("select");
-      const options = f.options === "models" ? models.map((m) => [m.id, `${m.id} — ${m.note}${m.installed ? "" : " (pobierze się)"}`]) : f.options;
+      const options = f.options === "models" ? models.map((m) => [m.id, `${m.id} — ${m.note}${m.installed ? "" : " (pobierze się)"}`])
+        : f.options === "apiModels" ? apiModels : f.options;
       for (const [value, text] of options) {
         const o = document.createElement("option");
         o.value = value; o.textContent = text;
         input.appendChild(o);
       }
-      input.value = settings[f.key];
+      input.value = settings[f.key] || options[0]?.[0];
     } else {
       input = document.createElement("input");
       input.type = f.type;

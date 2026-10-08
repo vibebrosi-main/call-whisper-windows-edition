@@ -27,13 +27,22 @@ pub fn model_path(model: &str) -> PathBuf {
 fn variants(vendor: &Path) -> Vec<(&'static str, PathBuf)> {
     ["vulkan", "cpu"]
         .into_iter()
-        .map(|v| (v, vendor.join("whisper").join(v).join(exe("whisper-server"))))
+        .map(|v| {
+            (
+                v,
+                vendor.join("whisper").join(v).join(exe("whisper-server")),
+            )
+        })
         .filter(|(_, p)| p.exists())
         .collect()
 }
 
 fn exe(name: &str) -> String {
-    if cfg!(windows) { format!("{name}.exe") } else { name.to_string() }
+    if cfg!(windows) {
+        format!("{name}.exe")
+    } else {
+        name.to_string()
+    }
 }
 
 pub struct WhisperServer {
@@ -46,7 +55,11 @@ pub struct WhisperServer {
 
 impl WhisperServer {
     pub fn new(vendor: PathBuf) -> Self {
-        Self { vendor, processes: HashMap::new(), variant: None }
+        Self {
+            vendor,
+            processes: HashMap::new(),
+            variant: None,
+        }
     }
 
     pub fn binary_available(&self) -> bool {
@@ -89,7 +102,13 @@ impl WhisperServer {
         anyhow::bail!("whisper-server nie wystartował: {last_error}")
     }
 
-    async fn spawn(&mut self, binary: &Path, config: &Config, model: &Path, client: &WhisperClient) -> anyhow::Result<()> {
+    async fn spawn(
+        &mut self,
+        binary: &Path,
+        config: &Config,
+        model: &Path,
+        client: &WhisperClient,
+    ) -> anyhow::Result<()> {
         // Wyjście do pliku, nie do potoku: potok, którego nikt nie czyta,
         // zapycha się po 64 kB i serwer staje w połowie rozmowy.
         let log_dir = settings::log_dir();
@@ -124,7 +143,14 @@ impl WhisperServer {
             }
             if let Ok(Some(status)) = child.try_wait() {
                 let output = std::fs::read_to_string(&log_path).unwrap_or_default();
-                let tail: String = output.chars().rev().take(200).collect::<Vec<_>>().into_iter().rev().collect();
+                let tail: String = output
+                    .chars()
+                    .rev()
+                    .take(200)
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .rev()
+                    .collect();
                 anyhow::bail!("zakończył się ({status}): {tail}");
             }
             tokio::time::sleep(Duration::from_millis(250)).await;
@@ -149,9 +175,11 @@ impl Drop for WhisperServer {
 }
 
 #[cfg(windows)]
+pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+#[cfg(windows)]
 pub fn hide_console(command: &mut Command) {
     use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     command.creation_flags(CREATE_NO_WINDOW);
 }
 
@@ -199,9 +227,26 @@ pub mod job {
             }
         }
     }
+
+    /// To samo dla procesów z tokio, które oddają tylko PID.
+    pub fn assign_pid(pid: u32) {
+        use windows_sys::Win32::Foundation::CloseHandle;
+        use windows_sys::Win32::System::Threading::{
+            OpenProcess, PROCESS_SET_QUOTA, PROCESS_TERMINATE,
+        };
+        let Some(job) = handle() else { return };
+        unsafe {
+            let process = OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, 0, pid);
+            if !process.is_null() {
+                AssignProcessToJobObject(job as _, process);
+                CloseHandle(process);
+            }
+        }
+    }
 }
 
 #[cfg(not(windows))]
 pub mod job {
     pub fn assign(_child: &std::process::Child) {}
+    pub fn assign_pid(_pid: u32) {}
 }

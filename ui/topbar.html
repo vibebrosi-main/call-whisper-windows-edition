@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <title>call-whisper — pasek</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Odpowiednik wyspy w notchu z macOS: pasek tuż pod górną krawędzią
+       ekranu, najbliżej kamery. Podpowiedź czytana stąd wygląda jak
+       patrzenie rozmówcy w oczy. Ukryty w udostępnianiu ekranu. */
+    html, body { background: transparent; }
+    body { display: block; color: #fff; }
+    .island { margin: 0 auto; background: #000; border-radius: 0 0 22px 22px; padding: 8px 18px 10px;
+      box-shadow: 0 4px 14px rgba(0,0,0,.35); cursor: default; }
+    .bar { display: flex; align-items: center; gap: 10px; height: 22px; font-size: 13px; font-weight: 600; }
+    .bar .dot { width: 8px; height: 8px; border-radius: 50%; background: #F2B8B5; animation: pulse 1.2s infinite; }
+    .bar .grow { flex: 1; color: #C4C7C5; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .bar time { font-variant-numeric: tabular-nums; color: #C4C7C5; }
+    .hint { padding-top: 6px; }
+    .hint .q { color: #A8C7FA; font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+    .hint .a { font-size: 16px; line-height: 1.45; user-select: text; }
+    .hint .a p { margin: 0 0 4px; }
+  </style>
+</head>
+<body>
+  <div class="island" id="island" title="Dwuklik: włącz albo wyłącz nasłuch">
+    <div class="bar">
+      <span class="dot" id="dot"></span>
+      <span class="grow" id="label">Słucham</span>
+      <time id="clock">00:00</time>
+    </div>
+    <div class="hint hidden" id="hint"><div class="q" id="q"></div><div class="a" id="a"></div></div>
+  </div>
+  <script src="shared.js"></script>
+  <script>
+    const { invoke } = window.__TAURI__.core;
+    const { listen } = window.__TAURI__.event;
+    const $ = (id) => document.getElementById(id);
+
+    let state = null;
+    let shownId = null;
+    let hideAt = 0;
+    let hovered = false;
+
+    // Ile trzeba, żeby przeczytać odpowiedź na głos: ~2,5 słowa na sekundę
+    // plus zapas na start. Krócej niż 8 s nie ma sensu.
+    function readingMs(text) {
+      const words = text.split(/\s+/).filter(Boolean).length;
+      return Math.max(8000, (words / 2.5) * 1000 + 3000);
+    }
+
+    function render() {
+      if (!state) return;
+      const latest = state.answers[state.answers.length - 1];
+      const pending = latest && (latest.status === "pending" || latest.status === "streaming");
+      if (latest && latest.id !== shownId) { shownId = latest.id; hideAt = 0; }
+      if (latest && !pending && hideAt === 0) hideAt = Date.now() + readingMs(latest.answer || "");
+      // Odpowiedź w drodze — pasek się nie zwija.
+      const showHint = latest && (pending || hovered || Date.now() < hideAt);
+
+      $("label").textContent = pending ? "Myślę…" : state.isRunning ? "Słucham" : "Zatrzymane";
+      $("dot").classList.toggle("hidden", !state.isRunning);
+      if (state.startedAt) {
+        const s = Math.max(0, Math.floor((Date.now() - state.startedAt) / 1000));
+        $("clock").textContent = `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+      }
+      $("hint").classList.toggle("hidden", !showHint);
+      if (showHint) {
+        $("q").textContent = latest.question;
+        $("a").innerHTML = latest.status === "error" ? escapeHtml(latest.error ?? "Błąd") : markdown(latest.answer || "…");
+      }
+      resize(showHint);
+    }
+
+    let lastSize = "";
+    async function resize(expanded) {
+      const width = expanded ? 620 : 300;
+      const height = Math.ceil($("island").getBoundingClientRect().height) + 16;
+      const key = `${width}x${height}`;
+      if (key === lastSize) return;
+      lastSize = key;
+      document.querySelector(".island").style.width = (width - 16) + "px";
+      await invoke("place_topbar", { width, height });
+    }
+
+    $("island").addEventListener("mouseenter", () => { hovered = true; render(); });
+    $("island").addEventListener("mouseleave", () => { hovered = false; hideAt = Math.max(hideAt, Date.now() + 2000); render(); });
+    $("island").addEventListener("dblclick", () => invoke(state?.isRunning ? "stop" : "start"));
+    setInterval(render, 500);
+
+    (async () => {
+      state = await invoke("get_state");
+      render();
+      await listen("state", (e) => { state = e.payload; render(); });
+    })();
+  </script>
+</body>
+</html>

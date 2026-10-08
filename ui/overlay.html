@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <title>call-whisper — nakładka</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Pływające okno z odpowiedziami nad rozmową. Bez ramki systemowej:
+       pasek u góry służy do przeciągania. */
+    body { flex-direction: column; background: var(--card); border: 1px solid var(--outline-variant); border-radius: 12px; }
+    .drag { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 16px; cursor: move; }
+    .drag b { flex: 1; font-size: 14px; }
+    .drag .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--error); animation: pulse 1.2s infinite; }
+    .answers { padding: 0 12px 12px; }
+  </style>
+</head>
+<body>
+  <div class="drag" data-tauri-drag-region>
+    <span class="dot hidden" id="dot"></span>
+    <b data-tauri-drag-region>Podpowiedzi</b>
+    <button class="icon-btn" id="close" title="Zamknij nakładkę">✕</button>
+  </div>
+  <div class="scroll" id="scroll"><div class="answers" id="answers"></div></div>
+  <div class="question">
+    <div class="field">
+      <textarea id="ask" rows="1" placeholder="Zapytaj o cokolwiek…"></textarea>
+      <button class="send" id="send" disabled title="Wyślij">↑</button>
+    </div>
+  </div>
+  <script src="shared.js"></script>
+  <script>
+    const { invoke } = window.__TAURI__.core;
+    const { listen } = window.__TAURI__.event;
+    const $ = (id) => document.getElementById(id);
+
+    function render(state) {
+      $("dot").classList.toggle("hidden", !state.isRunning);
+      const box = $("answers");
+      const atBottom = $("scroll").scrollHeight - $("scroll").scrollTop - $("scroll").clientHeight < 60;
+      box.innerHTML = "";
+      if (state.answers.length === 0) {
+        const p = document.createElement("p");
+        p.className = "hint";
+        p.textContent = "Pytania z rozmowy pojawią się tutaj.";
+        box.appendChild(p);
+      }
+      for (const item of state.answers) box.appendChild(answerCard(item));
+      if (atBottom) $("scroll").scrollTop = $("scroll").scrollHeight;
+    }
+
+    async function send() {
+      const question = $("ask").value.trim();
+      if (!question) return;
+      await invoke("ask", { question, image: null });
+      $("ask").value = "";
+      $("send").disabled = true;
+    }
+    $("ask").addEventListener("input", () => { $("send").disabled = !$("ask").value.trim(); });
+    $("ask").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
+    $("send").onclick = send;
+    $("close").onclick = () => invoke("toggle_overlay");
+
+    (async () => {
+      render(await invoke("get_state"));
+      await listen("state", (e) => render(e.payload));
+    })();
+  </script>
+</body>
+</html>

@@ -11,6 +11,7 @@ use cw_core::audio_ring::AudioRing;
 use cw_core::diarizer::{Diarizer, Framer, SpeakerTracker, Turn};
 use cw_core::dsp::{MfccExtractor, Vad};
 use cw_core::text::Text;
+use cw_core::transcript_store::UNKNOWN_SPEAKER;
 use cw_core::vocabulary::Vocabulary;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -533,8 +534,6 @@ impl State {
         }
     }
 }
-
-pub const UNKNOWN_SPEAKER: &str = "Rozmówca";
 
 /// Anulowanie to tu przerwane zadanie tokio, nie błąd — do kanału nie dociera.
 fn describe(err: WhisperError) -> String {

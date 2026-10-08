@@ -7,7 +7,7 @@ aplikacji macOS z [vibebrosi-main/whisper](https://github.com/vibebrosi-main/whi
 
 Pobierz `call-whisper_*_x64-setup.exe` z [Releases](../../releases/latest)
 i uruchom. Instalator wiezie silnik mowy (Vulkan na każde GPU, zapasowo CPU)
-i ffmpeg. Model mowy (~490 MB) pobiera się przy pierwszym „Słuchaj".
+ffmpeg i rozpoznawanie głosów (sherpa-onnx). Model mowy (~490 MB) pobiera się przy pierwszym „Słuchaj".
 
 Instalator nie jest podpisany — SmartScreen pokaże ostrzeżenie:
 „Więcej informacji" → „Uruchom mimo to".
@@ -37,5 +37,9 @@ Testy rdzenia: `cargo test -p cw-core`.
 - [x] Etap 2: podpowiedzi (Claude Code, API), wykrywanie pytań, zrzuty ekranu
 - [x] Etap 3: nakładka, pasek u góry ekranu (ukryte w udostępnianiu ekranu), import nagrań
 - [x] Etap 4: wykrywanie rozmów, OBS
-- [ ] Rozpoznawanie głosów po rozmowie (sieć neuronowa; na macOS CoreML, tu ONNX)
+- [x] Rozpoznawanie głosów po rozmowie (sherpa-onnx: pyannote + CAM++, jak na macOS)
+
+## Licencja
+
+Patrz [LICENSE.md](LICENSE.md).
 <!-- bump: decfccb -->

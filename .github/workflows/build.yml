@@ -81,6 +81,30 @@ jobs:
           New-Item -ItemType Directory -Force vendor/ffmpeg | Out-Null
           Get-ChildItem -Recurse ffmpeg-src -Filter ffmpeg.exe | Select-Object -First 1 | Copy-Item -Destination vendor/ffmpeg/
 
+      # Rozpoznawanie głosów po rozmowie: sherpa-onnx (pyannote + CAM++), to
+      # samo co na macOS. Sumy SHA-256 sprawdzane przed rozpakowaniem.
+      - name: Silnik rozpoznawania głosów
+        shell: pwsh
+        run: |
+          function Fetch($url, $out, $sha) {
+            Invoke-WebRequest $url -OutFile $out
+            $actual = (Get-FileHash $out -Algorithm SHA256).Hash
+            if ($actual -ne $sha.ToUpper()) { throw "$out: zła suma SHA-256 ($actual)" }
+          }
+          Fetch https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.12.23/sherpa-onnx-v1.12.23-win-x64-shared-MT-Release-no-tts.tar.bz2 sherpa.tar.bz2 81f08f3f12a0d2377923eca3b288b895e1d18e45a1eb99478e3a32a43c58b9c0
+          Fetch https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2 seg.tar.bz2 24615ee884c897d9d2ba09bb4d30da6bb1b15e685065962db5b02e76e4996488
+          Fetch https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx emb.onnx 357a834f702b80161e5b981182c038e18553c1f2ca752ed6cec2052365d4129b
+          tar -xjf sherpa.tar.bz2
+          tar -xjf seg.tar.bz2
+          New-Item -ItemType Directory -Force vendor/sherpa | Out-Null
+          $dir = Get-ChildItem -Directory sherpa-onnx-v1.12.23-win-x64* | Select-Object -First 1
+          Get-ChildItem -Recurse $dir -Filter sherpa-onnx-offline-speaker-diarization.exe | Select-Object -First 1 | Copy-Item -Destination vendor/sherpa/
+          # Windows szuka DLL obok programu.
+          Get-ChildItem -Recurse $dir -Filter *.dll | Copy-Item -Destination vendor/sherpa/
+          Copy-Item sherpa-onnx-pyannote-segmentation-3-0/model.onnx vendor/sherpa/segmentation.onnx
+          Copy-Item emb.onnx vendor/sherpa/embedding.onnx
+          Get-ChildItem vendor/sherpa
+
       # Wersja rośnie z każdym buildem — inaczej updater nie widzi nowości.
       - name: Wersja
         shell: pwsh
@@ -115,7 +139,8 @@ jobs:
       - name: Sprawdzam zasoby w paczce
         shell: pwsh
         run: |
-          foreach ($f in "vendor/whisper/vulkan/whisper-server.exe", "vendor/whisper/cpu/whisper-server.exe", "vendor/ffmpeg/ffmpeg.exe") {
+          foreach ($f in "vendor/whisper/vulkan/whisper-server.exe", "vendor/whisper/cpu/whisper-server.exe", "vendor/ffmpeg/ffmpeg.exe",
+                    "vendor/sherpa/sherpa-onnx-offline-speaker-diarization.exe", "vendor/sherpa/segmentation.onnx", "vendor/sherpa/embedding.onnx") {
             if (-not (Test-Path "target/release/$f")) { throw "Brak $f w paczce" }
           }
 

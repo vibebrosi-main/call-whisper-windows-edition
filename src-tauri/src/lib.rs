@@ -1,5 +1,6 @@
 mod assistant;
 mod audio;
+mod diarization;
 mod media_import;
 mod meetings;
 mod model_downloader;

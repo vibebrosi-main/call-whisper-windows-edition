@@ -4,6 +4,7 @@
 
 use crate::assistant::{self, ClaudeBridge, Image};
 use crate::audio::{AudioSource, Capture};
+use crate::diarization::{self, WavFileWriter};
 use crate::media_import;
 use crate::model_downloader;
 use crate::obs::{self, ObsLink};
@@ -15,6 +16,7 @@ use cw_core::assistant::{
     build_prompt, AssistantItem, AssistantSession, Found, QuestionWatcher, DEFAULT_CONTEXT_SEGMENTS,
 };
 use cw_core::markdown::{Markdown, MarkdownOptions, Session, SessionMeta};
+use cw_core::speaker_turns::SpeakerTurns;
 use cw_core::time::{now_ms, TimeFormat};
 use cw_core::transcript_store::{Segment, TranscriptStore};
 use cw_core::vocabulary::Vocabulary;
@@ -70,6 +72,8 @@ struct Inner {
     bridge_started: bool,
     /// Sesja związana z nagraniem w OBS — przy stopie kończymy i jego.
     obs_session: bool,
+    /// Dźwięk komputera tej sesji na dysku — dla rozpoznawania głosów po rozmowie.
+    tape: Option<Arc<WavFileWriter>>,
     /// Metadane sesji z importu; `None` = rozmowa nagrana na żywo.
     imported_meta: Option<SessionMeta>,
     is_running: bool,
@@ -122,6 +126,7 @@ impl Recorder {
                 pending_auto: None,
                 bridge_started: false,
                 obs_session: false,
+                tape: None,
                 imported_meta: None,
                 is_running: false,
                 is_processing: false,
@@ -421,6 +426,16 @@ impl Recorder {
             Vocabulary::MAX_CHARS,
         );
 
+        // Zapis na dysk tylko wtedy, gdy będzie z czego korzystać.
+        let tape = (settings.diarize_after && sources.contains(&AudioSource::System))
+            .then(|| {
+                let name = format!("call-whisper-{}.wav", TimeFormat::filename_stamp(now));
+                WavFileWriter::create(std::env::temp_dir().join(name))
+                    .ok()
+                    .map(Arc::new)
+            })
+            .flatten();
+
         let mut pipelines = Vec::new();
         let mut captures = Vec::new();
         let mut failure = None;
@@ -441,7 +456,15 @@ impl Recorder {
             } else {
                 ""
             };
-            match Capture::start(source, device, now, pipeline.sender(), move |err| {
+            let send = pipeline.sender();
+            let tee = tape.clone().filter(|_| source == AudioSource::System);
+            let on_chunk = move |chunk: crate::audio::PcmChunk| {
+                if let Some(tape) = &tee {
+                    tape.append(&chunk.samples, chunk.start_ms);
+                }
+                send(chunk);
+            };
+            match Capture::start(source, device, now, on_chunk, move |err| {
                 let _ = errors.send(Event::Error(format!("Przechwytywanie przerwane: {err}")));
             }) {
                 Ok(capture) => captures.push(capture),
@@ -503,6 +526,7 @@ impl Recorder {
                 inner.status.push_str(" · OBS nagrywa");
             }
             inner.obs_session = obs_session;
+            inner.tape = tape;
             inner.last_error = obs_note;
             inner.tasks.push(self.spawn_events(events_rx));
             inner.tasks.push(self.spawn_ticker());
@@ -649,6 +673,16 @@ impl Recorder {
         self.publish();
         crate::windows::sync_topbar(&self.app, false);
 
+        let tape = self.inner.lock().unwrap().tape.take();
+        if let Some(tape) = tape {
+            tape.finish();
+            if self.segments().is_empty() {
+                let _ = std::fs::remove_file(&tape.path);
+            } else {
+                self.diarize_session(tape.path.clone());
+            }
+        }
+
         let obs_session = std::mem::take(&mut self.inner.lock().unwrap().obs_session);
         let mut video = recording_path;
         if obs_session && video.is_none() {
@@ -663,6 +697,59 @@ impl Recorder {
         if let Some(video) = video.filter(|_| !self.segments().is_empty()) {
             self.save_next_to(&video);
         }
+    }
+
+    /// Rozpoznawanie głosów nagranej rozmowy. Na żywo zostają pewne etykiety
+    /// „Ty" / „Rozmówcy"; dopiero po rozmowie, gdy klastrowanie widzi całe
+    /// nagranie, „Rozmówcy" rozpadają się na „Rozmówca 1", „Rozmówca 2"…
+    fn diarize_session(self: &Arc<Self>, wav: PathBuf) {
+        let Some(engine) = diarization::Engine::locate(&self.vendor) else {
+            let _ = std::fs::remove_file(&wav);
+            self.set_error("Brak silnika rozpoznawania głosów w instalacji.");
+            return;
+        };
+        self.inner.lock().unwrap().is_processing = true;
+        self.set_status("Rozpoznaję głosy…");
+        let this = self.clone();
+        let task = tokio::spawn(async move {
+            let path = wav.clone();
+            let result = tokio::task::spawn_blocking(move || engine.run(&path, None)).await;
+            let _ = std::fs::remove_file(&wav);
+            {
+                let mut inner = this.inner.lock().unwrap();
+                match result {
+                    Ok(Ok(turns)) => {
+                        let segments = inner.store.segments();
+                        let relabeled = SpeakerTurns::relabel(
+                            &segments,
+                            &turns,
+                            SpeakerTurns::is_system_label,
+                            "Rozmówca",
+                        );
+                        let voices: std::collections::HashSet<&str> = relabeled
+                            .iter()
+                            .map(|s| s.speaker.as_str())
+                            .filter(|s| s.starts_with("Rozmówca "))
+                            .collect();
+                        let count = voices.len();
+                        inner.store = rebuilt(inner.store.started_at(), &relabeled);
+                        inner.status = if count > 1 {
+                            format!("Zatrzymane · rozpoznano {count} głosy rozmówców")
+                        } else {
+                            "Zatrzymane · jeden głos po drugiej stronie".into()
+                        };
+                    }
+                    Ok(Err(err)) => {
+                        inner.last_error = Some(err.to_string());
+                        inner.status = "Zatrzymane".into();
+                    }
+                    Err(_) => inner.status = "Zatrzymane".into(),
+                }
+                inner.is_processing = false;
+            }
+            this.publish();
+        });
+        self.inner.lock().unwrap().processing = Some(task);
     }
 
     /// Transkrypt obok pliku wideo z OBS, z tą samą nazwą i czasami
@@ -722,6 +809,10 @@ impl Recorder {
                     &path,
                     settings.whisper_port,
                     &settings.language_code(),
+                    settings
+                        .diarize_after
+                        .then(|| diarization::Engine::locate(&this.vendor))
+                        .flatten(),
                     move |m| progress.set_status(m),
                 )
                 .await;
@@ -731,19 +822,7 @@ impl Recorder {
                         Ok(result) => {
                             let count = result.segments.len();
                             let started = result.meta.started_at.unwrap_or_else(now_ms);
-                            inner.store = TranscriptStore::new(started);
-                            // Segmenty z importu są gotowe — wkładamy je jako zamknięte.
-                            for segment in &result.segments {
-                                inner.store.upsert(
-                                    &segment.id,
-                                    Some(&segment.speaker),
-                                    &segment.text,
-                                    segment.started_at,
-                                    true,
-                                );
-                                inner.store.seal(&segment.id, segment.ended_at);
-                            }
-                            inner.store.finalize_all(now_ms());
+                            inner.store = rebuilt(started, &result.segments);
                             inner.session = AssistantSession::new(30);
                             inner.started_at = Some(started);
                             inner.imported_meta = Some(result.meta);
@@ -752,9 +831,9 @@ impl Recorder {
                             } else {
                                 format!("Zaimportowano {name} · {count} wypowiedzi")
                             };
-                            if settings.diarize_after {
-                                inner.last_error = Some("Bez podziału na głosy: rozpoznawanie głosów dojdzie w kolejnej wersji na Windows.".into());
-                            }
+                            inner.last_error = result
+                                .diarization_note
+                                .map(|n| format!("Bez podziału na głosy: {n}"));
                         }
                         Err(err) => {
                             inner.last_error = Some(err.to_string());
@@ -1083,4 +1162,21 @@ pub fn assistant_label(settings: &Settings) -> String {
             }
         }
     }
+}
+
+/// Magazyn z gotowych, zamkniętych segmentów (import, nowe etykiety mówców).
+fn rebuilt(started_at: f64, segments: &[Segment]) -> TranscriptStore {
+    let mut store = TranscriptStore::new(started_at);
+    for segment in segments {
+        store.upsert(
+            &segment.id,
+            Some(&segment.speaker),
+            &segment.text,
+            segment.started_at,
+            true,
+        );
+        store.seal(&segment.id, segment.ended_at);
+    }
+    store.finalize_all(now_ms());
+    store
 }

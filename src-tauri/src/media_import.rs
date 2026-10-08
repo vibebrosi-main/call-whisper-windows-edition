@@ -15,6 +15,8 @@ use std::process::{Command, Stdio};
 pub struct ImportResult {
     pub segments: Vec<Segment>,
     pub meta: SessionMeta,
+    /// Dlaczego rozpoznawanie głosów się nie odbyło, choć było zamówione.
+    pub diarization_note: Option<String>,
 }
 
 /// Dekoduje dźwięk do 16 kHz mono f32. Mix, a nie pojedyncza ścieżka:
@@ -94,6 +96,7 @@ pub async fn run(
     file: &Path,
     whisper_port: u16,
     language: &str,
+    diarizer: Option<crate::diarization::Engine>,
     progress: impl Fn(String),
 ) -> anyhow::Result<ImportResult> {
     let name = file
@@ -140,7 +143,23 @@ pub async fn run(
         context = joined.chars().skip(skip).collect();
     }
 
-    let labels = SpeakerTurns::label(&texts, &[], "Osoba", "Nagranie");
+    let mut turns = Vec::new();
+    let mut diarization_note = None;
+    if let Some(engine) = diarizer.filter(|_| !texts.is_empty()) {
+        progress("Rozpoznaję głosy…".into());
+        let wav = std::env::temp_dir().join(format!("cw-import-{}.wav", std::process::id()));
+        let tape = crate::diarization::WavFileWriter::create(wav.clone())?;
+        tape.append(&pcm, 0.0);
+        tape.finish();
+        let path = wav.clone();
+        match tokio::task::spawn_blocking(move || engine.run(&path, None)).await? {
+            Ok(found) => turns = found,
+            // Transkrypt bez etykiet jest wciąż wart więcej niż żaden.
+            Err(err) => diarization_note = Some(err.to_string()),
+        }
+        let _ = std::fs::remove_file(wav);
+    }
+    let labels = SpeakerTurns::label(&texts, &turns, "Osoba", "Nagranie");
     let paragraphs = SpeakerTurns::paragraphs(&texts, &labels, 2.5, 60.0);
     let started_at = std::fs::metadata(file)
         .and_then(|m| m.created().or_else(|_| m.modified()))
@@ -159,7 +178,11 @@ pub async fn run(
         started_at: Some(started_at),
         ended_at: Some(started_at + seconds * 1000.0),
     };
-    Ok(ImportResult { segments, meta })
+    Ok(ImportResult {
+        segments,
+        meta,
+        diarization_note,
+    })
 }
 
 #[cfg(test)]
@@ -196,7 +219,7 @@ mod tests {
             .unwrap_or("8898".into())
             .parse()
             .unwrap();
-        let result = run(Path::new("ffmpeg"), Path::new(&file), port, "pl", |m| {
+        let result = run(Path::new("ffmpeg"), Path::new(&file), port, "pl", None, |m| {
             eprintln!("{m}")
         })
         .await

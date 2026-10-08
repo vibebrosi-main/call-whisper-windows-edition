@@ -38,4 +38,4 @@ Testy rdzenia: `cargo test -p cw-core`.
 - [x] Etap 3: nakładka, pasek u góry ekranu (ukryte w udostępnianiu ekranu), import nagrań
 - [x] Etap 4: wykrywanie rozmów, OBS
 - [ ] Rozpoznawanie głosów po rozmowie (sieć neuronowa; na macOS CoreML, tu ONNX)
-<!-- bump: 91e12f7 -->
+<!-- bump: decfccb -->
